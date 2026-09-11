@@ -57,7 +57,40 @@ ok "git $(git --version | awk '{print $3}')"
 step "2/6  Red '$NETWORK'"
 
 if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
-  die "La red '$NETWORK' no existe. Es la que gestiona Traefik; creala o corrige NETWORK=."
+  # Docker antepone el nombre del stack a las redes declaradas dentro de el
+  # (una red 'sgs' del stack 'traefik' acaba llamandose 'traefik_sgs'), asi que
+  # antes de rendirnos buscamos candidatas por sufijo.
+  echo "  La red '$NETWORK' no existe con ese nombre exacto. Buscando candidatas..."
+
+  CANDIDATES=$(docker network ls --filter driver=overlay --format '{{.Name}}' \
+    | grep -E "(^|_)${NETWORK}$" || true)
+  COUNT=$(printf '%s' "$CANDIDATES" | grep -c . || true)
+
+  if [ "$COUNT" -eq 1 ]; then
+    NETWORK="$CANDIDATES"
+    ok "Encontrada: '$NETWORK' (se usara esta)"
+  elif [ "$COUNT" -gt 1 ]; then
+    echo "  Varias coinciden:"
+    printf '    %s\n' $CANDIDATES
+    die "Elige una y reejecuta:  NETWORK=<nombre> bash $0"
+  else
+    echo
+    echo "  Redes overlay disponibles:"
+    docker network ls --filter driver=overlay --format '    {{.Name}}' || true
+    echo
+    echo "  Redes a las que esta conectado Traefik:"
+    TSVC=$(docker service ls --format '{{.Name}}' 2>/dev/null | grep -i traefik | head -1 || true)
+    if [ -n "$TSVC" ]; then
+      for id in $(docker service inspect "$TSVC" \
+          --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null); do
+        docker network inspect "$id" --format '    {{.Name}}' 2>/dev/null || true
+      done
+    else
+      echo "    (no encontre el servicio de Traefik)"
+    fi
+    echo
+    die "Reejecuta con la red correcta:  NETWORK=<nombre> bash $0"
+  fi
 fi
 
 NET_DRIVER=$(docker network inspect "$NETWORK" --format '{{.Driver}}')
@@ -130,7 +163,19 @@ step "6/6  Variables de entorno"
 ENV_FILE="$INSTALL_DIR/deploy/swarm/.env"
 
 if [ -f "$ENV_FILE" ]; then
-  ok ".env ya existe; no lo toco (tus valores se conservan)"
+  ok ".env ya existe; conservo tus valores"
+  # Un .env de una instalacion anterior puede no tener esta variable, y sin
+  # ella el stack apuntaria a una red que no existe.
+  if grep -q '^TRAEFIK_NETWORK=' "$ENV_FILE"; then
+    CURRENT_NET=$(grep '^TRAEFIK_NETWORK=' "$ENV_FILE" | cut -d= -f2-)
+    if [ "$CURRENT_NET" != "$NETWORK" ]; then
+      sed -i "s|^TRAEFIK_NETWORK=.*|TRAEFIK_NETWORK=$NETWORK|" "$ENV_FILE"
+      warn "TRAEFIK_NETWORK actualizado: '$CURRENT_NET' -> '$NETWORK'"
+    fi
+  else
+    sed -i "1i TRAEFIK_NETWORK=$NETWORK" "$ENV_FILE"
+    ok "TRAEFIK_NETWORK=$NETWORK anadido al .env existente"
+  fi
 else
   # Generamos los secretos aqui para que nunca pasen por un chat, un correo
   # ni el historial del shell.
@@ -139,6 +184,9 @@ else
 
   cat > "$ENV_FILE" <<EOF
 # Generado por install.sh el $(date -Iseconds). Este archivo esta en .gitignore.
+
+# Nombre REAL de la red de Traefik, detectado durante la instalacion.
+TRAEFIK_NETWORK=$NETWORK
 
 API_KEY_PEPPER=$PEPPER
 BOT_IMAGE=${BOT_IMAGE_NAME}:${BOT_IMAGE_TAG}

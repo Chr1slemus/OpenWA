@@ -39,9 +39,14 @@ const L = labels.join('\n');
 check('traefik.enable=true', L.includes('traefik.enable=true'));
 // Traefik >= 3.2.2 con el provider swarm: traefik.docker.* esta deprecado.
 const activeLabels = labels.filter((l) => !l.trimStart().startsWith('#'));
-check('red declarada = sgs (etiqueta v3 traefik.swarm.network)',
-  activeLabels.some((l) => l.includes('traefik.swarm.network=sgs')),
+const netLabel = activeLabels.find((l) => l.includes('traefik.swarm.network=')) ?? '';
+check('etiqueta de red v3 (traefik.swarm.network) presente', netLabel !== '',
   `(${JSON.stringify(activeLabels.filter((l) => l.includes('.network')))})`);
+// El nombre real lo detecta install.sh: Docker antepone el nombre del stack a
+// las redes declaradas dentro de el (sgs -> traefik_sgs).
+check('la red de la etiqueta es la MISMA variable que la del bloque networks',
+  netLabel.includes('${TRAEFIK_NETWORK') && raw.includes('name: ${TRAEFIK_NETWORK'),
+  `(etiqueta: ${JSON.stringify(netLabel)})`);
 check('no se usa la etiqueta deprecada traefik.docker.network',
   !activeLabels.some((l) => l.includes('traefik.docker.network')),
   '(deprecada desde Traefik 3.2.2 para el provider swarm)');

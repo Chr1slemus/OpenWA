@@ -141,10 +141,10 @@ services:
         # `traefik.docker.network` esta DEPRECADO para este provider y Traefik
         # lo avisa en el log ("Labels traefik.docker.* for Swarm provider are
         # deprecated"). La forma correcta en v3 es traefik.swarm.*.
-        - "traefik.swarm.network=sgs"
+        - "traefik.swarm.network=${TRAEFIK_NETWORK:-sgs}"
         # Si resultara que tu Traefik usa el provider `docker` en vez de
         # `swarm`, cambia la linea de arriba por esta:
-        # - "traefik.docker.network=sgs"
+        # - "traefik.docker.network=${TRAEFIK_NETWORK:-sgs}"
         - "traefik.http.routers.cgswa.rule=Host(`wa.central-global-solutions.com`)"
         - "traefik.http.routers.cgswa.entrypoints=https"
         - "traefik.http.routers.cgswa.tls=true"
@@ -237,3 +237,7 @@ volumes:
 networks:
   sgs:
     external: true
+    # Docker antepone el nombre del stack a las redes declaradas dentro de el:
+    # una red 'sgs' creada por el stack 'traefik' se llama 'traefik_sgs'.
+    # install.sh detecta el nombre real y lo escribe en .env.
+    name: ${TRAEFIK_NETWORK:-sgs}
