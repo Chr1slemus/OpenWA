@@ -137,6 +137,24 @@ export const config = {
   dedupeSize: int('DEDUPE_SIZE', 5000),
 };
 
+// OPENWA_API_KEY y OPENAI_API_KEY se diferencian en dos letras transpuestas.
+// Intercambiarlas produce un 401 "Invalid API key" opaco, que parece un
+// problema de permisos y cuesta rastrear. Se detecta por el prefijo: las de
+// OpenWA empiezan por "owa_" y las de OpenAI por "sk-".
+if (config.openwa.apiKey.startsWith('sk-')) {
+  throw new Error(
+    'OPENWA_API_KEY contiene una clave de OpenAI (empieza por "sk-").\n' +
+      '  → OPENWA_API_KEY es la clave del gateway y empieza por "owa_".\n' +
+      '  → La clave de OpenAI va en OPENAI_API_KEY.',
+  );
+}
+if (config.ai.apiKey && config.ai.apiKey.startsWith('owa_')) {
+  throw new Error(
+    'OPENAI_API_KEY contiene una clave de OpenWA (empieza por "owa_").\n' +
+      '  → Estan intercambiadas: revisa tambien OPENWA_API_KEY.',
+  );
+}
+
 // La IA sin clave no falla al vuelo: falla aqui, al arrancar, donde se ve.
 if (config.ai.enabled && !config.ai.apiKey) {
   throw new Error(

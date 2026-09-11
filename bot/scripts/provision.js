@@ -31,6 +31,17 @@ const EVENTS = [
 ];
 
 if (!API_KEY) fail('Falta OPENWA_API_KEY');
+// Confundir OPENWA_API_KEY con OPENAI_API_KEY (dos letras transpuestas) da un
+// 401 opaco de OpenWA. Se detecta por el prefijo antes de salir a la red.
+if (API_KEY.startsWith('sk-')) {
+  fail(
+    'OPENWA_API_KEY contiene una clave de OpenAI (empieza por "sk-").\n' +
+      '  La clave de OpenWA empieza por "owa_"; la de OpenAI va en OPENAI_API_KEY.',
+  );
+}
+if (!API_KEY.startsWith('owa_')) {
+  console.warn(`\n  AVISO: OPENWA_API_KEY no empieza por "owa_" (empieza por "${API_KEY.slice(0, 4)}").`);
+}
 if (!WEBHOOK_SECRET) fail('Falta WEBHOOK_SECRET');
 if (WEBHOOK_SECRET.length < 16) fail('WEBHOOK_SECRET debe tener al menos 16 caracteres');
 
