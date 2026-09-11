@@ -218,8 +218,8 @@ const escCli = '5215566665555@c.us';
 // "cuanto cuesta" ya no sirve: lo atrapa antes la regla de precio, a proposito.
 await post(msg({ chatId: escCli, from: escCli, body: 'trabajan tambien los fines de semana' }));
 await settle();
-check('[ESCALAR] deriva a una persona del equipo',
-  sends()[0]?.body?.text?.includes('alguien del equipo'),
+check('[ESCALAR] deriva a Christian y ofrece la agenda',
+  sends()[0]?.body?.text?.includes('Christian') && sends()[0]?.body?.text?.includes('calendly.com'),
   `(${JSON.stringify(sends()[0]?.body?.text)})`);
 const antesDeInsistir = sends().length;
 await post(msg({ chatId: escCli, from: escCli, body: 'sigues ahi?' }));
@@ -248,6 +248,54 @@ check('si la IA hace timeout, responde el menu',
 aiMode = 'ok';
 aiCfg.enabled = false;
 
+console.log('\n--- Persona y canal ---');
+const { construirPromptSistema: cps } = await import('../src/brand.js');
+const p0 = cps();
+
+check('se presenta como representacion virtual, no como Christian',
+  /representacion virtual/i.test(p0) && /no Christian Lemus/i.test(p0));
+check('prohibe afirmar ser humano', /Nunca afirmes ser humano/i.test(p0));
+// El perfil venia escrito para el avatar del sitio. En WhatsApp estas tres
+// instrucciones se invierten, y es el error mas facil de cometer al portarlo.
+// Ojo: la frase SI aparece, pero prohibida. Comprobar solo su ausencia daria
+// un falso negativo, que es como se cuelan los errores de adaptacion de canal.
+check('prohibe mandar a una "seccion de contacto"',
+  /ni le digas que vaya a una "seccion de contacto"/i.test(p0));
+check('no ofrece el numero de WhatsApp (ya escriben por ahi)',
+  !p0.includes('6060 5993'), '(se lo estarian dando a quien ya lo uso)');
+check('comparte el enlace de agenda', p0.includes('calendly.com/chris-lemus/cgs'));
+check('pide el correo', /pide su correo/i.test(p0));
+check('corta ante conducta impropia', /CONDUCTA IMPROPIA/i.test(p0));
+check('no entrega la solucion', /NO des la solucion/i.test(p0));
+
+console.log('\n--- Captura de correo y corte ---');
+const { resolveReply: rr } = await import('../src/rules.js');
+const ctxBase = (chatId, body) => ({
+  chatId, body, text: normalizeTxt(body), type: 'chat', isGroup: false,
+  senderName: null, messageId: 'x', withinBusinessHours: true,
+});
+function normalizeTxt(t) {
+  return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+const cliEmail = 'email@c.us';
+await rr(ctxBase(cliEmail, 'hola'));
+const rEmail = await rr(ctxBase(cliEmail, 'claro, es chris@empresa.com.sv'));
+check('detecta y acusa recibo del correo',
+  rEmail.rule === 'captura-correo' && /Anotado/i.test(rEmail.text), `(${rEmail.rule})`);
+check('el acuse incluye el enlace de agenda', rEmail.text.includes('calendly.com'));
+
+const cliMal = 'mal@c.us';
+const rMal = await rr(ctxBase(cliMal, 'sos un imbecil'));
+check('cierra ante conducta impropia', rMal.rule === 'conducta-impropia', `(${rMal.rule})`);
+check('cierra sin sermon', rMal.text.length < 120 && !rMal.text.includes('!'));
+const rMal2 = await rr(ctxBase(cliMal, 'hola otra vez'));
+check('la conversacion cerrada no se reabre sola', rMal2.text === null, `(${rMal2.rule})`);
+
+const rPrecio = await rr(ctxBase('precio@c.us', 'cuanto cuesta el servicio'));
+check('precio lleva a la llamada, sin cifra',
+  rPrecio.text.includes('calendly.com') && !/\$|100 dolares/.test(rPrecio.text));
+
 console.log('\n--- Marca: nada interno se filtra ---');
 const { construirPromptSistema } = await import('../src/brand.js');
 const prompt = construirPromptSistema();
@@ -273,13 +321,14 @@ const usadas = PROHIBIDAS.filter((t) => {
 });
 check('no describe a CGS con palabras vetadas', usadas.length === 0, `(${JSON.stringify(usadas)})`);
 
-check('prohibe diagnosticar por WhatsApp', /no diagnostiques/i.test(prompt));
+check('el diagnostico requiere ver la operacion',
+  /requiere ver la operacion por dentro/i.test(prompt));
 check('protege la metodologia', /no expliques como trabajamos/i.test(prompt));
 check('prohibe inventar datos', /no inventes/i.test(prompt));
 check('define el escalamiento', prompt.includes('[ESCALAR]'));
-check('sin precios por defecto', !prompt.includes('20,000'));
-check('con precios si se activa',
-  construirPromptSistema({ incluirPrecios: true }).includes('20,000'));
+check('sin tarifa por defecto', !prompt.includes('100 dolares'));
+check('con tarifa si se activa',
+  construirPromptSistema({ incluirPrecios: true }).includes('100 dolares la hora'));
 
 console.log('\n--- Marca: estilo del texto deterministico ---');
 const { rules: reglas } = await import('../src/rules.js');
