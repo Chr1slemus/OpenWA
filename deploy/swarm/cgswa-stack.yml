@@ -57,6 +57,17 @@ services:
       DATABASE_SYNCHRONIZE: "false"
       DATABASE_LOGGING: "false"
 
+      # --- Redis (cola de entrega de webhooks) ---
+      # SIN esto, OpenWA registra el webhook como "disparado" (lastTriggeredAt
+      # se actualiza) pero el trabajo de BullMQ nunca se ejecuta de verdad: el
+      # POST al bot no sale. Es un fallo silencioso, sin error en los logs.
+      REDIS_ENABLED: "true"
+      REDIS_HOST: cgswa-redis
+      REDIS_PORT: "6379"
+      # Sin esto, OpenWA usa despacho "inline" de webhooks y, en esta version,
+      # los descarta silenciosamente. Con la cola BullMQ, la entrega es real.
+      QUEUE_ENABLED: "true"
+
       # --- Seguridad ---
       # Fijalo ANTES de crear cualquier API key: cambiarlo despues las invalida.
       API_KEY_PEPPER: ${API_KEY_PEPPER}
@@ -122,7 +133,12 @@ services:
         constraints:
           - node.role == manager
       restart_policy:
-        condition: on-failure
+        # "any", no "on-failure": el propio dashboard de OpenWA puede pedirse
+        # un reinicio a si mismo (sale con codigo 0, una salida LIMPIA) cuando
+        # se guarda configuracion desde la UI. Con "on-failure" Swarm trata esa
+        # salida como exito y NUNCA levanta un reemplazo: el servicio se queda
+        # en 0/1 para siempre sin ningun error visible. Ya paso una vez.
+        condition: any
         delay: 10s
         # SIN max_attempts a proposito. Con un limite, tres fallos seguidos
         # (o tres healthchecks en rojo durante un corte de red) dejan el
@@ -159,6 +175,48 @@ services:
         - "traefik.http.routers.cgswa.tls=true"
         - "traefik.http.routers.cgswa.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencryptresolver}"
         - "traefik.http.services.cgswa.loadbalancer.server.port=2785"
+
+  redis:
+    # Cola de entrega de webhooks (BullMQ) para OpenWA. Sin esto, los webhooks
+    # se marcan como enviados pero nunca salen de verdad.
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+
+    volumes:
+      - redis-data:/data
+
+    networks:
+      sgs:
+        aliases:
+          - cgswa-redis
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 32M
+      labels:
+        - "traefik.enable=false"
 
   bot:
     # Swarm NO construye imagenes. Hay que construirla en el nodo antes de
@@ -250,6 +308,8 @@ volumes:
   openwa-data:
     # Volumen local en el manager. Es lo unico irreemplazable del stack:
     # si se pierde, hay que volver a escanear el QR y reemitir las API keys.
+    driver: local
+  redis-data:
     driver: local
 
 networks:
