@@ -17,7 +17,17 @@ Internet ──443──▶ Traefik ──sgs──▶ cgswa_openwa:2785   (dash
 El bot **no se expone a internet**: sin puertos publicados y con
 `traefik.enable=false`. Solo OpenWA lo alcanza por la red interna `sgs`.
 
-👉 **Empieza aquí: [deploy/swarm/README-swarm.md](deploy/swarm/README-swarm.md)**
+## 🚀 Instalación
+
+Un solo comando en el VPS. Verifica prerequisitos, clona el repo en `/opt/cgs-wa`,
+construye la imagen del bot y genera los secretos:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Chr1slemus/OpenWA/main/deploy/swarm/install.sh | bash
+```
+
+👉 **Runbook completo paso a paso: [INSTALL.md](INSTALL.md)**
+Referencia técnica de Swarm: [deploy/swarm/README-swarm.md](deploy/swarm/README-swarm.md)
 
 ---
 
@@ -32,6 +42,8 @@ El bot **no se expone a internet**: sin puertos publicados y con
 | [bot/src/throttle.js](bot/src/throttle.js) | Límite por chat y global (protección anti-baneo) |
 | [bot/scripts/provision.js](bot/scripts/provision.js) | Crea la sesión y registra el webhook (idempotente) |
 | [bot/test/e2e.test.mjs](bot/test/e2e.test.mjs) | 17 pruebas contra un OpenWA simulado — no toca WhatsApp |
+| [INSTALL.md](INSTALL.md) | **Runbook de instalación, paso a paso** |
+| [deploy/swarm/install.sh](deploy/swarm/install.sh) | Instalador idempotente: prerequisitos, clonado, build y secretos |
 | [deploy/swarm/cgswa-stack.yml](deploy/swarm/cgswa-stack.yml) | El stack de Swarm (OpenWA + bot + Traefik) |
 | [deploy/swarm/stack.env.example](deploy/swarm/stack.env.example) | Variables a cargar en Portainer |
 | [deploy/swarm/validate-stack.mjs](deploy/swarm/validate-stack.mjs) | 34 comprobaciones sobre el stack antes de desplegarlo |
