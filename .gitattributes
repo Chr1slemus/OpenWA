@@ -1,0 +1,21 @@
+# El destino de despliegue es Linux. Sin esto, un clon en Windows convierte
+# estos archivos a CRLF y el contenedor falla de formas poco obvias (un
+# Dockerfile o un shebang con \r al final no se ejecutan).
+* text=auto eol=lf
+
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.js            text eol=lf
+*.mjs           text eol=lf
+*.json          text eol=lf
+*.md            text eol=lf
+*.sh            text eol=lf
+.env.example    text eol=lf
+.dockerignore   text eol=lf
+.gitignore      text eol=lf
+
+# Binarios: que Git no toque los saltos de linea.
+*.png binary
+*.jpg binary
+*.gz  binary

@@ -1,0 +1,239 @@
+# ---------------------------------------------------------------------------
+# Stack CGS WA para Docker Swarm + Portainer + Traefik
+#
+#   Dominio : https://wa.central-global-solutions.com
+#   Red     : sgs (externa, gestionada por Traefik)
+#   Stack   : cgswa   → los servicios quedan como cgswa_openwa y cgswa_bot
+#
+# El nombre del stack IMPORTA: el DNS interno (cgswa_bot) se usa en la URL del
+# webhook y en SSRF_ALLOWED_HOSTS. Si despliegas con otro nombre, ajusta ambos.
+#
+# Despliegue: ver deploy/swarm/README-swarm.md
+# ---------------------------------------------------------------------------
+
+version: "3.8"
+
+services:
+  openwa:
+    image: ghcr.io/rmyndharis/openwa:latest
+
+    environment:
+      NODE_ENV: production
+      PORT: "2785"
+      LOG_LEVEL: info
+      TZ: America/Mexico_City
+      # La imagen corre como usuario sin privilegios; HOME debe ser escribible.
+      HOME: /tmp
+
+      # --- Identidad del nodo ---
+      # Se usa para el lease de propiedad de la sesion y DEBE ser estable entre
+      # reinicios. El ejemplo oficial usa {{.Node.Hostname}}-{{.Task.Slot}};
+      # aqui lo fijamos a un literal para que no cambie nunca.
+      NODE_ID: cgswa-openwa-1
+
+      # Rearranca solas las sesiones ya autenticadas tras un reinicio. El
+      # DEFAULT EN PRODUCCION ES false: sin esto, cada redespliegue deja la
+      # sesion DISCONNECTED y el bot enmudece hasta que alguien la arranque a
+      # mano. Es seguro SOLO porque replicas es 1 (dos replicas resucitando la
+      # misma sesion arriesgan un logout forzado o un baneo).
+      AUTO_START_SESSIONS: "true"
+
+      # En SIGTERM la app drena las peticiones en vuelo durante estos ms.
+      # stop_grace_period (abajo) debe ser mayor que este valor mas el cierre
+      # de Chromium.
+      SHUTDOWN_DELAY_MS: "5000"
+
+      # --- Motor ---
+      # whatsapp-web.js = menor riesgo de baneo (Chromium real), ~300-500 MB RAM.
+      ENGINE_TYPE: whatsapp-web.js
+      PUPPETEER_HEADLESS: "true"
+
+      # --- Base de datos (SQLite dentro del volumen) ---
+      DATABASE_TYPE: sqlite
+      # DATABASE_NAME se deja SIN definir a proposito: con sqlite, un valor aqui
+      # se interpreta como RUTA del archivo y provoca un boot-loop SQLITE_CANTOPEN.
+      MAIN_DATABASE_NAME: ./data/main.sqlite
+      SESSION_DATA_PATH: ./data/sessions
+      DATABASE_SYNCHRONIZE: "false"
+      DATABASE_LOGGING: "false"
+
+      # --- Seguridad ---
+      # Fijalo ANTES de crear cualquier API key: cambiarlo despues las invalida.
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
+      CORS_ORIGINS: https://wa.central-global-solutions.com
+      # Traefik termina el TLS, asi que dejamos que el navegador fuerce https.
+      CSP_UPGRADE_INSECURE_REQUESTS: "true"
+      # TRUSTED_PROXIES se queda VACIO a proposito. Solo hace falta si usas
+      # allowedIps por API key; llenarlo sin necesitarlo permite falsificar la
+      # IP de origen via X-Forwarded-For.
+      TRUSTED_PROXIES: ""
+
+      # --- Webhooks ---
+      WEBHOOK_TIMEOUT: "10000"
+      WEBHOOK_RETRY_DELAY: "5000"
+      # La proteccion SSRF se queda ENCENDIDA. Solo damos de alta al bot como
+      # destino interno de confianza (el caso "sidecar webhook receiver" que
+      # documenta OpenWA). Incluimos las dos formas en que Swarm resuelve el
+      # servicio: el nombre corto y el cualificado por stack.
+      WEBHOOK_SSRF_PROTECT: "true"
+      SSRF_ALLOWED_HOSTS: cgswa_bot,bot
+
+      # --- Limites de la API ---
+      RATE_LIMIT_MEDIUM_TTL: "60000"
+      RATE_LIMIT_MEDIUM_LIMIT: "120"
+
+    volumes:
+      # TODO /app/data, no solo /app/data/sessions. Aqui viven las API keys,
+      # main.sqlite, la media y los plugins: montar solo el subdirectorio de
+      # sesiones haria que perdieras las claves en cada redespliegue.
+      - openwa-data:/app/data
+
+    networks:
+      - sgs
+
+    # Chromium necesita cerrar ordenadamente: un SIGKILL a los 10s (el default)
+    # puede dejar corrupto el perfil de sesion en el volumen.
+    stop_grace_period: 60s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2785/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+    deploy:
+      # NUNCA subas esto de 1. OpenWA guarda estado del motor en memoria; dos
+      # replicas sobre el mismo volumen corrompen la autenticacion de WhatsApp.
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        # SIN max_attempts a proposito. Con un limite, tres fallos seguidos
+        # (o tres healthchecks en rojo durante un corte de red) dejan el
+        # servicio caido PARA SIEMPRE, sin que nadie lo levante. Para un bot
+        # 24/7 preferimos que reintente indefinidamente.
+        window: 120s
+      update_config:
+        order: stop-first   # obligatorio: dos instancias no pueden coexistir
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+      labels:
+        # En Swarm las etiquetas de Traefik van bajo deploy.labels, NO al nivel
+        # del servicio. Puestas arriba se aplican al contenedor y Traefik no las ve.
+        - "traefik.enable=true"
+        # Traefik 3.5.3 con el provider `swarm`. Desde la 3.2.2,
+        # `traefik.docker.network` esta DEPRECADO para este provider y Traefik
+        # lo avisa en el log ("Labels traefik.docker.* for Swarm provider are
+        # deprecated"). La forma correcta en v3 es traefik.swarm.*.
+        - "traefik.swarm.network=sgs"
+        # Si resultara que tu Traefik usa el provider `docker` en vez de
+        # `swarm`, cambia la linea de arriba por esta:
+        # - "traefik.docker.network=sgs"
+        - "traefik.http.routers.cgswa.rule=Host(`wa.central-global-solutions.com`)"
+        - "traefik.http.routers.cgswa.entrypoints=https"
+        - "traefik.http.routers.cgswa.tls=true"
+        - "traefik.http.routers.cgswa.tls.certresolver=le"
+        - "traefik.http.services.cgswa.loadbalancer.server.port=2785"
+
+  bot:
+    # Swarm NO construye imagenes. Hay que construirla en el nodo antes de
+    # desplegar (ver README-swarm.md) o publicarla en un registro.
+    image: ${BOT_IMAGE:-cgswa-bot:1.0.0}
+
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      WEBHOOK_PATH: /webhook
+      LOG_LEVEL: info
+      TZ: America/Mexico_City
+
+      # DNS interno de Swarm: <stack>_<servicio>.
+      OPENWA_BASE_URL: http://cgswa_openwa:2785/api
+      OPENWA_API_KEY: ${OPENWA_API_KEY}
+      OPENWA_SESSION_ID: ${OPENWA_SESSION_ID:-cgs-main}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+
+      IGNORE_GROUPS: "true"
+      IGNORE_BROADCAST: "true"
+      MARK_AS_READ: "true"
+      SIMULATE_TYPING: "true"
+      QUOTE_ORIGINAL: "false"
+      # Mientras pruebas, pon aqui SOLO tu numero (5215512345678@c.us).
+      ALLOWLIST: ${ALLOWLIST:-}
+      BLOCKLIST: ${BLOCKLIST:-}
+
+      # Limites anti-baneo. No los subas sin una razon medida.
+      MAX_REPLIES_PER_CHAT: "8"
+      THROTTLE_WINDOW_MS: "60000"
+      MAX_REPLIES_GLOBAL: "20"
+
+      # --- IA (solo cuando ninguna regla coincide) ---
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
+      AI_MAX_TOKENS: "300"
+      AI_TEMPERATURE: "0.3"
+      AI_TIMEOUT_MS: "8000"
+
+      BUSINESS_HOURS_ENABLED: ${BUSINESS_HOURS_ENABLED:-false}
+      BUSINESS_HOURS_TZ: America/Mexico_City
+      BUSINESS_HOURS_DAYS: "1,2,3,4,5"
+      BUSINESS_HOURS_START: "9"
+      BUSINESS_HOURS_END: "18"
+
+    networks:
+      - sgs
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+      labels:
+        # El bot NO se publica. Traefik debe ignorarlo explicitamente: sin esto,
+        # algunas configuraciones de Traefik exponen el servicio por defecto.
+        - "traefik.enable=false"
+
+volumes:
+  openwa-data:
+    # Volumen local en el manager. Es lo unico irreemplazable del stack:
+    # si se pierde, hay que volver a escanear el QR y reemitir las API keys.
+    driver: local
+
+networks:
+  sgs:
+    external: true
