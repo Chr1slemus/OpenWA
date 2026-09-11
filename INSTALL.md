@@ -6,7 +6,7 @@ publicado en <https://wa.central-global-solutions.com>.
 Sigue los pasos en orden. Cada uno dice **qué debes ver** si salió bien.
 
 ```
-Internet ──443──▶ Traefik ──sgs──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
                                        ▲     │
                          webhook firmado│     │REST
                                        │     ▼
@@ -62,20 +62,36 @@ construye la imagen del bot y genera los secretos.
 curl -fsSL https://raw.githubusercontent.com/Chr1slemus/OpenWA/main/deploy/swarm/install.sh | bash
 ```
 
-✅ **Debes ver** seis bloques `==>` terminando en `Listo. Lo que falta es tuyo:`
+✅ **Debes ver** seis bloques `==>` y, al final, el resumen de lo detectado:
+
+```
+Configuracion detectada
+  red           : CGS
+  entrypoint    : websecure
+  certresolver  : letsencryptresolver
+  etiquetas     : traefik.swarm.*
+```
+
+**Revisa ese resumen.** El script lee la configuración real de tu Traefik en vez
+de asumir nombres convencionales: la red a la que está conectado, el entrypoint
+que escucha en `:443` y el nombre del resolver de ACME. Esos tres valores son
+distintos en cada instalación, y si no coinciden Traefik devuelve 404 o no emite
+el certificado.
 
 El script es **idempotente**: si algo falla, corrígelo y vuelve a ejecutarlo sin
 miedo. No despliega nada ni toca WhatsApp.
 
-**Qué comprueba, y qué hacer si se queja:**
+**Si algo se queja:**
 
 | Aviso | Qué hacer |
 |---|---|
 | `Docker no esta instalado` | `curl -fsSL https://get.docker.com \| sh` |
 | `Este nodo no esta en modo Swarm` | `docker swarm init` |
-| `La red 'sgs' no existe` | Revisa el nombre real: `docker network ls` |
-| `Provider 'docker' detectado` | Edita `deploy/swarm/cgswa-stack.yml` y cambia `traefik.swarm.network` por `traefik.docker.network` |
-| `No pude determinar el provider` | `docker service logs traefik_traefik \| head -40` y busca la línea de providers |
+| `Traefik esta en varias redes` | Elige cuál y reejecuta: `NETWORK=<nombre> bash /opt/cgs-wa/deploy/swarm/install.sh` |
+| `No detecte el entrypoint de :443` | Fuérzalo: `TRAEFIK_ENTRYPOINT=<nombre> bash ...` |
+| `No detecte el certresolver` | Fuérzalo: `TRAEFIK_CERTRESOLVER=<nombre> bash ...` |
+| `Solo provider 'docker'` | El script ya cambia la etiqueta solo; no hagas nada |
+| `todavia no resuelve` | El DNS del paso 1 aún no propagó. Puedes seguir, pero el certificado no se emitirá hasta que lo haga |
 
 > **Sobre los secretos:** el script genera `API_KEY_PEPPER` y `WEBHOOK_SECRET`
 > nuevos, directamente en el servidor. Es a propósito — así nunca pasan por un
@@ -362,7 +378,8 @@ docker service update --image ghcr.io/rmyndharis/openwa:latest cgswa_openwa   # 
 | Síntoma | Causa y arreglo |
 |---|---|
 | Traefik da **404** | Las etiquetas quedaron fuera de `deploy.labels`, o el provider es `docker` y no `swarm` (paso 3) |
-| Certificado inválido | DNS aún sin propagar, o el certresolver no se llama `le`. `docker service logs traefik_traefik` |
+| Certificado inválido | DNS aún sin propagar, o `TRAEFIK_CERTRESOLVER` no coincide con el de tu Traefik (aquí: `letsencryptresolver`). Revisa `docker service logs traefik_traefik` |
+| Traefik da **404** | `TRAEFIK_NETWORK` o `TRAEFIK_ENTRYPOINT` no coinciden. Reejecuta el instalador: los redetecta y corrige el `.env` |
 | `No such image: cgswa-bot` | Swarm la buscó en un registro. Despliega por CLI con `--resolve-image never` |
 | Webhook rechazado con **400** | Guardia SSRF. Verifica `SSRF_ALLOWED_HOSTS` y que `cgswa_bot` esté arriba |
 | `Firma de webhook invalida` | El `WEBHOOK_SECRET` del stack no coincide con el del webhook registrado. Vuelve a correr el paso 8 |

@@ -2,25 +2,26 @@
 #
 # Instalador de CGS WA en el VPS (Docker Swarm + Portainer + Traefik).
 #
-# Verifica los prerequisitos, construye la imagen del bot y prepara el .env.
-# Es IDEMPOTENTE: puedes ejecutarlo las veces que haga falta.
+# Detecta la configuracion real de tu Traefik (red, entrypoint HTTPS y
+# certresolver) en vez de asumir nombres convencionales, verifica los
+# prerequisitos, construye la imagen del bot y prepara el .env.
 #
-# NO despliega el stack ni toca WhatsApp: eso lo haces tu desde Portainer,
-# para que veas lo que ocurre en cada paso.
+# Es IDEMPOTENTE: puedes ejecutarlo las veces que haga falta.
+# NO despliega el stack ni toca WhatsApp: eso lo haces tu, paso a paso.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Chr1slemus/OpenWA/main/deploy/swarm/install.sh | bash
-#   # o, si ya clonaste:  bash deploy/swarm/install.sh
+#
+# Cualquier valor detectado se puede forzar por variable de entorno:
+#   NETWORK=CGS TRAEFIK_ENTRYPOINT=websecure bash install.sh
 #
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/Chr1slemus/OpenWA.git}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/cgs-wa}"
-NETWORK="${NETWORK:-sgs}"
 BOT_IMAGE_NAME="${BOT_IMAGE_NAME:-cgswa-bot}"
 BOT_IMAGE_TAG="${BOT_IMAGE_TAG:-1.0.0}"
 DOMAIN="${DOMAIN:-wa.central-global-solutions.com}"
 
-# Colores solo si la salida es una terminal (no ensucian los logs redirigidos).
 if [ -t 1 ]; then
   R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[1m'; N=$'\e[0m'
 else
@@ -38,102 +39,109 @@ step "1/6  Prerequisitos"
 command -v docker >/dev/null 2>&1 || die "Docker no esta instalado."
 ok "docker $(docker --version | awk '{print $3}' | tr -d ,)"
 
-docker compose version >/dev/null 2>&1 || warn "El plugin 'docker compose' no esta; no es imprescindible para Swarm."
-
-if ! docker info 2>/dev/null | grep -q "Swarm: active"; then
-  die "Este nodo no esta en modo Swarm. Inicializalo con: docker swarm init"
-fi
+docker info 2>/dev/null | grep -q "Swarm: active" \
+  || die "Este nodo no esta en modo Swarm. Inicializalo con: docker swarm init"
 ok "Swarm activo"
 
-if [ "$(docker info --format '{{.Swarm.ControlAvailable}}' 2>/dev/null)" != "true" ]; then
-  die "Este nodo no es manager. El stack debe desplegarse desde un manager."
-fi
+[ "$(docker info --format '{{.Swarm.ControlAvailable}}' 2>/dev/null)" = "true" ] \
+  || die "Este nodo no es manager. El stack debe desplegarse desde un manager."
 ok "El nodo es manager"
 
-command -v git >/dev/null 2>&1 || die "git no esta instalado. Instalalo con: apt-get install -y git"
+command -v git >/dev/null 2>&1 || die "git no esta instalado: apt-get install -y git"
 ok "git $(git --version | awk '{print $3}')"
 
-# ---------------------------------------------------------------------------
-step "2/6  Red '$NETWORK'"
-
-if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
-  # Docker antepone el nombre del stack a las redes declaradas dentro de el
-  # (una red 'sgs' del stack 'traefik' acaba llamandose 'traefik_sgs'), asi que
-  # antes de rendirnos buscamos candidatas por sufijo.
-  echo "  La red '$NETWORK' no existe con ese nombre exacto. Buscando candidatas..."
-
-  CANDIDATES=$(docker network ls --filter driver=overlay --format '{{.Name}}' \
-    | grep -E "(^|_)${NETWORK}$" || true)
-  COUNT=$(printf '%s' "$CANDIDATES" | grep -c . || true)
-
-  if [ "$COUNT" -eq 1 ]; then
-    NETWORK="$CANDIDATES"
-    ok "Encontrada: '$NETWORK' (se usara esta)"
-  elif [ "$COUNT" -gt 1 ]; then
-    echo "  Varias coinciden:"
-    printf '    %s\n' $CANDIDATES
-    die "Elige una y reejecuta:  NETWORK=<nombre> bash $0"
-  else
-    echo
-    echo "  Redes overlay disponibles:"
-    docker network ls --filter driver=overlay --format '    {{.Name}}' || true
-    echo
-    echo "  Redes a las que esta conectado Traefik:"
-    TSVC=$(docker service ls --format '{{.Name}}' 2>/dev/null | grep -i traefik | head -1 || true)
-    if [ -n "$TSVC" ]; then
-      for id in $(docker service inspect "$TSVC" \
-          --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null); do
-        docker network inspect "$id" --format '    {{.Name}}' 2>/dev/null || true
-      done
-    else
-      echo "    (no encontre el servicio de Traefik)"
-    fi
-    echo
-    die "Reejecuta con la red correcta:  NETWORK=<nombre> bash $0"
-  fi
-fi
-
-NET_DRIVER=$(docker network inspect "$NETWORK" --format '{{.Driver}}')
-NET_SCOPE=$(docker network inspect "$NETWORK" --format '{{.Scope}}')
-ok "Existe (driver=$NET_DRIVER, scope=$NET_SCOPE)"
-
-if [ "$NET_DRIVER" != "overlay" ]; then
-  warn "La red no es 'overlay'. En Swarm los servicios necesitan una red overlay."
-fi
+command -v openssl >/dev/null 2>&1 || die "openssl no esta instalado: apt-get install -y openssl"
 
 # ---------------------------------------------------------------------------
-step "3/6  Traefik"
+step "2/6  Traefik: leer su configuracion real"
 
 TRAEFIK_SVC=$(docker service ls --format '{{.Name}}' 2>/dev/null | grep -i traefik | head -1 || true)
+[ -n "$TRAEFIK_SVC" ] || die "No encontre un servicio de Traefik. Si usas otro proxy, edita las etiquetas del stack a mano."
+ok "Servicio: $TRAEFIK_SVC"
 
-if [ -z "$TRAEFIK_SVC" ]; then
-  warn "No encontre un servicio de Traefik. Si usas otro proxy, ajusta las etiquetas del stack."
+TRAEFIK_ARGS=$(docker service inspect "$TRAEFIK_SVC" \
+  --format '{{range .Spec.TaskTemplate.ContainerSpec.Args}}{{println .}}{{end}}' 2>/dev/null || true)
+
+# --- Provider: decide que familia de etiquetas lee Traefik ---
+if echo "$TRAEFIK_ARGS" | grep -qi -- '--providers.swarm'; then
+  LABEL_NS="swarm"
+  ok "Provider 'swarm' activo -> etiquetas traefik.swarm.*"
+elif echo "$TRAEFIK_ARGS" | grep -qi -- '--providers.docker'; then
+  LABEL_NS="docker"
+  warn "Solo provider 'docker' -> etiquetas traefik.docker.*"
 else
-  ok "Servicio: $TRAEFIK_SVC"
+  LABEL_NS="swarm"
+  warn "No pude determinar el provider; asumo 'swarm'. Revisa: docker service logs $TRAEFIK_SVC | head -40"
+fi
 
-  # De que provider depende la etiqueta de red que lee Traefik.
-  TRAEFIK_CFG=$(docker service inspect "$TRAEFIK_SVC" \
-    --format '{{range .Spec.TaskTemplate.ContainerSpec.Args}}{{println .}}{{end}}' 2>/dev/null || true)
+# --- Red: la autoridad es la red a la que Traefik esta conectado ---
+if [ -n "${NETWORK:-}" ]; then
+  ok "Red forzada por variable: $NETWORK"
+else
+  TRAEFIK_NETS=""
+  for id in $(docker service inspect "$TRAEFIK_SVC" \
+      --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null); do
+    nm=$(docker network inspect "$id" --format '{{.Name}}' 2>/dev/null || true)
+    # 'ingress' es la red interna de routing de Swarm, nunca la de publicacion.
+    [ -n "$nm" ] && [ "$nm" != "ingress" ] && TRAEFIK_NETS="$TRAEFIK_NETS $nm"
+  done
+  TRAEFIK_NETS=$(echo "$TRAEFIK_NETS" | xargs || true)
+  NET_COUNT=$(echo "$TRAEFIK_NETS" | wc -w)
 
-  if echo "$TRAEFIK_CFG" | grep -qi -- '--providers.swarm'; then
-    ok "Provider 'swarm' -> el stack ya usa traefik.swarm.network. Sin cambios."
-  elif echo "$TRAEFIK_CFG" | grep -qi -- '--providers.docker'; then
-    warn "Provider 'docker' detectado. En cgswa-stack.yml cambia:"
-    warn "    traefik.swarm.network=$NETWORK   ->   traefik.docker.network=$NETWORK"
+  if [ "$NET_COUNT" -eq 1 ]; then
+    NETWORK="$TRAEFIK_NETS"
+    ok "Red detectada desde Traefik: '$NETWORK'"
+  elif [ "$NET_COUNT" -gt 1 ]; then
+    echo "  Traefik esta en varias redes: $TRAEFIK_NETS"
+    die "Elige una y reejecuta:  NETWORK=<nombre> bash $0"
   else
-    warn "No pude determinar el provider desde los argumentos del servicio."
-    warn "Su configuracion puede venir de un archivo. Revisa: docker service logs $TRAEFIK_SVC | head -40"
+    echo "  Redes overlay disponibles:"
+    docker network ls --filter driver=overlay --format '    {{.Name}}' || true
+    die "No pude deducir la red. Reejecuta con:  NETWORK=<nombre> bash $0"
   fi
+fi
 
-  # Traefik debe estar en la misma red para poder enrutar al stack.
-  if docker service inspect "$TRAEFIK_SVC" --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}} {{end}}' 2>/dev/null \
-      | tr ' ' '\n' | grep -q .; then
-    if docker network inspect "$NETWORK" --format '{{range $k,$v := .Services}}{{$k}} {{end}}' 2>/dev/null | grep -qi traefik; then
-      ok "Traefik esta conectado a '$NETWORK'"
-    else
-      warn "No confirme que Traefik este en '$NETWORK'. Si da 404 al enrutar, revisa esto."
-    fi
-  fi
+docker network inspect "$NETWORK" >/dev/null 2>&1 || die "La red '$NETWORK' no existe."
+ok "Red '$NETWORK' (driver=$(docker network inspect "$NETWORK" --format '{{.Driver}}'))"
+
+# --- Entrypoint HTTPS: el que escucha en :443, no el que se llame 'https' ---
+if [ -z "${TRAEFIK_ENTRYPOINT:-}" ]; then
+  TRAEFIK_ENTRYPOINT=$(echo "$TRAEFIK_ARGS" \
+    | grep -Eio -- '--entrypoints\.[a-z0-9_-]+\.address=:443' \
+    | head -1 | sed -E 's/--entrypoints\.([a-z0-9_-]+)\.address=:443/\1/i' || true)
+fi
+if [ -n "$TRAEFIK_ENTRYPOINT" ]; then
+  ok "Entrypoint HTTPS: '$TRAEFIK_ENTRYPOINT'"
+else
+  TRAEFIK_ENTRYPOINT="websecure"
+  warn "No detecte el entrypoint de :443; uso 'websecure'. Verificalo si da 404."
+fi
+
+# --- Certresolver ---
+if [ -z "${TRAEFIK_CERTRESOLVER:-}" ]; then
+  TRAEFIK_CERTRESOLVER=$(echo "$TRAEFIK_ARGS" \
+    | grep -Eio -- '--certificatesresolvers\.[a-z0-9_-]+\.' \
+    | head -1 | sed -E 's/--certificatesresolvers\.([a-z0-9_-]+)\./\1/i' || true)
+fi
+if [ -n "$TRAEFIK_CERTRESOLVER" ]; then
+  ok "Certresolver: '$TRAEFIK_CERTRESOLVER'"
+else
+  TRAEFIK_CERTRESOLVER="letsencrypt"
+  warn "No detecte el certresolver; uso 'letsencrypt'. Verificalo si el certificado no se emite."
+fi
+
+# ---------------------------------------------------------------------------
+step "3/6  DNS de $DOMAIN"
+
+MYIP=$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)
+DNSIP=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1 || true)
+
+if [ -z "$DNSIP" ]; then
+  warn "$DOMAIN todavia no resuelve. Sin DNS, Let's Encrypt no emitira el certificado."
+elif [ -n "$MYIP" ] && [ "$DNSIP" != "$MYIP" ]; then
+  warn "$DOMAIN apunta a $DNSIP pero este servidor es $MYIP."
+else
+  ok "$DOMAIN -> $DNSIP"
 fi
 
 # ---------------------------------------------------------------------------
@@ -147,9 +155,16 @@ else
   git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
   ok "Repositorio clonado"
 fi
-
 cd "$INSTALL_DIR"
 ok "Commit: $(git rev-parse --short HEAD)"
+
+# Si Traefik solo tiene el provider docker, la etiqueta de red cambia de familia.
+if [ "$LABEL_NS" = "docker" ]; then
+  if grep -q 'traefik\.swarm\.network' deploy/swarm/cgswa-stack.yml; then
+    sed -i 's/traefik\.swarm\.network=/traefik.docker.network=/' deploy/swarm/cgswa-stack.yml
+    warn "Etiqueta cambiada a traefik.docker.network en cgswa-stack.yml"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 step "5/6  Imagen del bot"
@@ -162,40 +177,36 @@ step "6/6  Variables de entorno"
 
 ENV_FILE="$INSTALL_DIR/deploy/swarm/.env"
 
-if [ -f "$ENV_FILE" ]; then
-  ok ".env ya existe; conservo tus valores"
-  # Un .env de una instalacion anterior puede no tener esta variable, y sin
-  # ella el stack apuntaria a una red que no existe.
-  if grep -q '^TRAEFIK_NETWORK=' "$ENV_FILE"; then
-    CURRENT_NET=$(grep '^TRAEFIK_NETWORK=' "$ENV_FILE" | cut -d= -f2-)
-    if [ "$CURRENT_NET" != "$NETWORK" ]; then
-      sed -i "s|^TRAEFIK_NETWORK=.*|TRAEFIK_NETWORK=$NETWORK|" "$ENV_FILE"
-      warn "TRAEFIK_NETWORK actualizado: '$CURRENT_NET' -> '$NETWORK'"
+# Escribe clave=valor en el .env: la reemplaza si existe, la anade si no.
+set_env() {
+  local k="$1" v="$2"
+  if grep -q "^${k}=" "$ENV_FILE" 2>/dev/null; then
+    local actual
+    actual=$(grep "^${k}=" "$ENV_FILE" | head -1 | cut -d= -f2-)
+    if [ "$actual" != "$v" ]; then
+      sed -i "s|^${k}=.*|${k}=${v}|" "$ENV_FILE"
+      warn "$k actualizado: '${actual}' -> '${v}'"
     fi
   else
-    sed -i "1i TRAEFIK_NETWORK=$NETWORK" "$ENV_FILE"
-    ok "TRAEFIK_NETWORK=$NETWORK anadido al .env existente"
+    echo "${k}=${v}" >> "$ENV_FILE"
+    ok "$k=${v} anadido"
   fi
-else
-  # Generamos los secretos aqui para que nunca pasen por un chat, un correo
-  # ni el historial del shell.
-  PEPPER=$(openssl rand -hex 32)
-  WHSECRET=$(openssl rand -hex 32)
+}
 
+if [ ! -f "$ENV_FILE" ]; then
+  # Los secretos se generan AQUI, en el servidor: asi no pasan por un chat,
+  # un correo ni el historial del shell.
   cat > "$ENV_FILE" <<EOF
 # Generado por install.sh el $(date -Iseconds). Este archivo esta en .gitignore.
 
-# Nombre REAL de la red de Traefik, detectado durante la instalacion.
-TRAEFIK_NETWORK=$NETWORK
+API_KEY_PEPPER=$(openssl rand -hex 32)
+WEBHOOK_SECRET=$(openssl rand -hex 32)
 
-API_KEY_PEPPER=$PEPPER
 BOT_IMAGE=${BOT_IMAGE_NAME}:${BOT_IMAGE_TAG}
-
-# Se rellena en el PASO 6 del runbook, tras crearla en el dashboard.
-OPENWA_API_KEY=
-
 OPENWA_SESSION_ID=cgs-main
-WEBHOOK_SECRET=$WHSECRET
+
+# Se rellena en el PASO 7 del runbook, tras crearla en el dashboard.
+OPENWA_API_KEY=
 
 # Pon TU numero en formato JID (5215512345678@c.us) antes de escanear el QR.
 ALLOWLIST=
@@ -210,24 +221,33 @@ OPENAI_API_KEY=
 EOF
   chmod 600 "$ENV_FILE"
   ok ".env creado con secretos nuevos (permisos 600)"
+else
+  ok ".env ya existe; conservo tus valores"
 fi
+
+# Los valores detectados se reescriben SIEMPRE: si cambias algo en Traefik,
+# una reejecucion del instalador vuelve a alinear el stack.
+set_env TRAEFIK_NETWORK      "$NETWORK"
+set_env TRAEFIK_ENTRYPOINT   "$TRAEFIK_ENTRYPOINT"
+set_env TRAEFIK_CERTRESOLVER "$TRAEFIK_CERTRESOLVER"
 
 # ---------------------------------------------------------------------------
 echo
-echo "${B}Listo. Lo que falta es tuyo:${N}"
+echo "${B}Configuracion detectada${N}"
+echo "  red           : $NETWORK"
+echo "  entrypoint    : $TRAEFIK_ENTRYPOINT"
+echo "  certresolver  : $TRAEFIK_CERTRESOLVER"
+echo "  etiquetas     : traefik.${LABEL_NS}.*"
 echo
-echo "  1. DNS: $DOMAIN debe apuntar a este servidor."
-echo "       dig +short $DOMAIN"
+echo "${B}Siguiente paso${N}"
 echo
-echo "  2. Edita las variables que quedaron vacias:"
-echo "       nano $ENV_FILE"
-echo "       - ALLOWLIST  : tu numero, para que el bot no conteste a nadie mas"
-echo "       - OPENAI_API_KEY : solo si vas a usar IA (AI_ENABLED=true)"
+echo "  1. Pon tu numero para las pruebas:"
+echo "       nano $ENV_FILE          # ALLOWLIST=5215512345678@c.us"
 echo
-echo "  3. Despliega el stack (nombre EXACTO: cgswa):"
+echo "  2. Despliega (el nombre del stack DEBE ser 'cgswa'):"
 echo "       cd $INSTALL_DIR/deploy/swarm"
 echo "       set -a; . ./.env; set +a"
 echo "       docker stack deploy -c cgswa-stack.yml --resolve-image never cgswa"
 echo
-echo "  4. Continua en el runbook: $INSTALL_DIR/INSTALL.md"
+echo "  3. Continua en el runbook (paso 6): $INSTALL_DIR/INSTALL.md"
 echo

@@ -50,11 +50,20 @@ check('la red de la etiqueta es la MISMA variable que la del bloque networks',
 check('no se usa la etiqueta deprecada traefik.docker.network',
   !activeLabels.some((l) => l.includes('traefik.docker.network')),
   '(deprecada desde Traefik 3.2.2 para el provider swarm)');
-check('rule con el dominio correcto',
-  L.includes('Host(`wa.central-global-solutions.com`)'),
-  '(backticks deben sobrevivir al parseo YAML)');
-check('entrypoint = https', L.includes('.entrypoints=https'));
-check('certresolver = le', L.includes('.tls.certresolver=le'));
+check('rule con Host() y el dominio por defecto correcto',
+  /Host\(`\$\{DOMAIN:-wa\.central-global-solutions\.com\}`\)/.test(L),
+  '(los backticks deben sobrevivir al parseo YAML)');
+
+// Estos nombres varian entre instalaciones de Traefik: en este servidor son
+// 'websecure' y 'letsencryptresolver', no 'https' y 'le'. Deben venir de
+// variables para que install.sh pueda inyectar los reales.
+check('entrypoint parametrizado (no fijo)',
+  /\.entrypoints=\$\{TRAEFIK_ENTRYPOINT:-websecure\}/.test(L),
+  `(${JSON.stringify(activeLabels.find((l) => l.includes('.entrypoints=')))})`);
+check('certresolver parametrizado (no fijo)',
+  /\.certresolver=\$\{TRAEFIK_CERTRESOLVER:-letsencryptresolver\}/.test(L),
+  `(${JSON.stringify(activeLabels.find((l) => l.includes('.certresolver=')))})`);
+check('TLS activado en el router', L.includes('.tls=true'));
 check('puerto del servicio = 2785', L.includes('loadbalancer.server.port=2785'));
 
 const routerNames = new Set(
@@ -90,7 +99,9 @@ check('DATABASE_TYPE=sqlite', env.DATABASE_TYPE === 'sqlite');
 check('NODE_ID es literal, no plantilla',
   typeof env.NODE_ID === 'string' && !env.NODE_ID.includes('{{'), `(${env.NODE_ID})`);
 check('TRUSTED_PROXIES vacio', env.TRUSTED_PROXIES === '');
-check('CORS con el dominio real', String(env.CORS_ORIGINS) === 'https://wa.central-global-solutions.com');
+check('CORS usa el mismo dominio que el router',
+  String(env.CORS_ORIGINS) === 'https://${DOMAIN:-wa.central-global-solutions.com}',
+  `(${env.CORS_ORIGINS})`);
 check('ENABLE_SWAGGER no forzado', !('ENABLE_SWAGGER' in env));
 check('HOME escribible para usuario sin privilegios', env.HOME === '/tmp');
 

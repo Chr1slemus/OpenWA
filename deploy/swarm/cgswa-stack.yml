@@ -60,7 +60,7 @@ services:
       # --- Seguridad ---
       # Fijalo ANTES de crear cualquier API key: cambiarlo despues las invalida.
       API_KEY_PEPPER: ${API_KEY_PEPPER}
-      CORS_ORIGINS: https://wa.central-global-solutions.com
+      CORS_ORIGINS: https://${DOMAIN:-wa.central-global-solutions.com}
       # Traefik termina el TLS, asi que dejamos que el navegador fuerce https.
       CSP_UPGRADE_INSECURE_REQUESTS: "true"
       # TRUSTED_PROXIES se queda VACIO a proposito. Solo hace falta si usas
@@ -141,14 +141,17 @@ services:
         # `traefik.docker.network` esta DEPRECADO para este provider y Traefik
         # lo avisa en el log ("Labels traefik.docker.* for Swarm provider are
         # deprecated"). La forma correcta en v3 es traefik.swarm.*.
-        - "traefik.swarm.network=${TRAEFIK_NETWORK:-sgs}"
-        # Si resultara que tu Traefik usa el provider `docker` en vez de
-        # `swarm`, cambia la linea de arriba por esta:
-        # - "traefik.docker.network=${TRAEFIK_NETWORK:-sgs}"
-        - "traefik.http.routers.cgswa.rule=Host(`wa.central-global-solutions.com`)"
-        - "traefik.http.routers.cgswa.entrypoints=https"
+        - "traefik.swarm.network=${TRAEFIK_NETWORK:-CGS}"
+        # Si tu Traefik solo tuviera el provider `docker`, la etiqueta seria
+        # traefik.docker.network. install.sh lo detecta y hace el cambio solo.
+        - "traefik.http.routers.cgswa.rule=Host(`${DOMAIN:-wa.central-global-solutions.com}`)"
+        # El entrypoint y el certresolver NO se llaman igual en cada instalacion
+        # de Traefik. install.sh lee los nombres reales del servicio (el
+        # entrypoint que escucha en :443 y el resolver de ACME) y los escribe
+        # en .env. Los defaults son solo un respaldo razonable.
+        - "traefik.http.routers.cgswa.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
         - "traefik.http.routers.cgswa.tls=true"
-        - "traefik.http.routers.cgswa.tls.certresolver=le"
+        - "traefik.http.routers.cgswa.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencryptresolver}"
         - "traefik.http.services.cgswa.loadbalancer.server.port=2785"
 
   bot:
@@ -237,7 +240,7 @@ volumes:
 networks:
   sgs:
     external: true
-    # Docker antepone el nombre del stack a las redes declaradas dentro de el:
-    # una red 'sgs' creada por el stack 'traefik' se llama 'traefik_sgs'.
-    # install.sh detecta el nombre real y lo escribe en .env.
-    name: ${TRAEFIK_NETWORK:-sgs}
+    # El nombre real de la red de Traefik en este servidor es 'CGS'.
+    # install.sh lo detecta leyendo a que red esta conectado Traefik (que es
+    # la fuente autoritativa) y lo escribe en .env como TRAEFIK_NETWORK.
+    name: ${TRAEFIK_NETWORK:-CGS}

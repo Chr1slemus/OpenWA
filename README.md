@@ -7,7 +7,7 @@ propio que recibe los mensajes por webhook y responde.
 **Dominio:** <https://wa.central-global-solutions.com>
 
 ```
-Internet ──443──▶ Traefik ──sgs──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
                                         ▲     │
                           webhook firmado│     │REST (X-API-Key)
                                         │     ▼
@@ -15,7 +15,7 @@ Internet ──443──▶ Traefik ──sgs──▶ cgswa_openwa:2785   (dash
 ```
 
 El bot **no se expone a internet**: sin puertos publicados y con
-`traefik.enable=false`. Solo OpenWA lo alcanza por la red interna `sgs`.
+`traefik.enable=false`. Solo OpenWA lo alcanza por la red interna `CGS`.
 
 ## 🚀 Instalación
 

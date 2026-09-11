@@ -1,9 +1,13 @@
 # Despliegue en Docker Swarm (Portainer + Traefik)
 
-VPS `62.169.16.23` · dominio `wa.central-global-solutions.com` · red `sgs` · Swarm de un nodo.
+VPS `62.169.16.23` · dominio `wa.central-global-solutions.com` · red `CGS` · Swarm de un nodo.
+Entrypoint HTTPS `websecure`, certresolver `letsencryptresolver`, provider `swarm`.
+
+> **Esta es la referencia tecnica.** Para instalar, sigue [../../INSTALL.md](../../INSTALL.md):
+> el instalador detecta estos valores solo y no hace falta que los copies a mano.
 
 ```
-Internet ──443──▶ Traefik ──sgs──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
                                         ▲     │
                           webhook firmado│     │REST
                                         │     ▼
@@ -231,7 +235,7 @@ nunca se probó no es un respaldo.
 | Síntoma | Causa y arreglo |
 |---|---|
 | Traefik devuelve **404** | El router no se registró. Casi siempre: las etiquetas quedaron fuera de `deploy.labels`, o Traefik usa el provider `docker` en vez de `swarm` (ver "Verificar el provider" abajo) |
-| Certificado inválido o "TRAEFIK DEFAULT CERT" | El DNS aún no apunta a `62.169.16.23`, o el nombre del certresolver no es `le`. Verifica con `docker service logs traefik` |
+| Certificado inválido o "TRAEFIK DEFAULT CERT" | El DNS aún no apunta a `62.169.16.23`, o el nombre del certresolver no coincide (en este servidor es `letsencryptresolver`). Verifica con `docker service logs traefik` |
 | El servicio del bot no arranca: `No such image` | Swarm buscó la imagen en un registro. Despliega por CLI con `--resolve-image never`, o publica la imagen en un registro |
 | Registrar el webhook da **400** | El guardia SSRF. Confirma `SSRF_ALLOWED_HOSTS=cgswa_bot,bot` y que el servicio `cgswa_bot` esté corriendo — el DNS se resuelve al registrar |
 | `Firma de webhook invalida` en los logs | El `WEBHOOK_SECRET` del stack no coincide con el `secret` del webhook registrado. Vuelve a registrarlo |
