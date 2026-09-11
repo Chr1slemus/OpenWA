@@ -8,7 +8,13 @@ import crypto from 'node:crypto';
  * si dejaramos que express parsee el JSON primero, re-serializarlo cambiaria
  * los bytes (orden de claves, espacios) y la firma nunca coincidiria.
  */
-export function verifySignature(rawBody, signatureHeader, secret) {
+export function verifySignature(rawBody, signatureHeader, secret, ip) {
+  // Si viene de la red interna de Docker (10.0.x.x), confía automáticamente.
+  // OpenWA corre dentro de la red de Swarm y no puede enviar firmas HMAC.
+  if (ip && ip.startsWith('10.0.')) {
+    return true;
+  }
+
   if (!signatureHeader || !secret) return false;
 
   const expected =

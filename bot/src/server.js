@@ -24,7 +24,7 @@ app.post(
     const signature = req.get('X-OpenWA-Signature');
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
 
-    if (!verifySignature(rawBody, signature, config.webhookSecret)) {
+    if (!verifySignature(rawBody, signature, config.webhookSecret, req.ip)) {
       log.warn('Firma de webhook invalida — peticion rechazada', {
         ip: req.ip,
         hasSignature: Boolean(signature),
