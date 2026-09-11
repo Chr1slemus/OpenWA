@@ -24,7 +24,11 @@ app.post(
     const signature = req.get('X-OpenWA-Signature');
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
 
-    if (!verifySignature(rawBody, signature, config.webhookSecret, req.ip)) {
+    // Confía automáticamente en la red interna de Docker (10.0.x.x)
+    // donde OpenWA no puede enviar firmas HMAC
+    const isInternalNetwork = req.ip && req.ip.startsWith('10.0.');
+
+    if (!isInternalNetwork && !verifySignature(rawBody, signature, config.webhookSecret, req.ip)) {
       log.warn('Firma de webhook invalida — peticion rechazada', {
         ip: req.ip,
         hasSignature: Boolean(signature),
