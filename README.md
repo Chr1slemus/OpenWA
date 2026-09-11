@@ -7,11 +7,11 @@ propio que recibe los mensajes por webhook y responde.
 **Dominio:** <https://wa.central-global-solutions.com>
 
 ```
-Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa-openwa:2785   (dashboard + API)
                                         ▲     │
                           webhook firmado│     │REST (X-API-Key)
                                         │     ▼
-                                    cgswa_bot:3000     (sin publicar)
+                                    cgswa-bot:3000     (sin publicar)
 ```
 
 El bot **no se expone a internet**: sin puertos publicados y con

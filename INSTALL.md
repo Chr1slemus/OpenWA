@@ -6,11 +6,11 @@ publicado en <https://wa.central-global-solutions.com>.
 Sigue los pasos en orden. Cada uno dice **qué debes ver** si salió bien.
 
 ```
-Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa-openwa:2785   (dashboard + API)
                                        ▲     │
                          webhook firmado│     │REST
                                        │     ▼
-                                   cgswa_bot:3000      (sin publicar)
+                                   cgswa-bot:3000      (sin publicar)
 ```
 
 **Antes de empezar, ten a mano:**
@@ -222,11 +222,11 @@ cd /opt/cgs-wa/deploy/swarm
 set -a; . ./.env; set +a
 
 docker exec -i $(docker ps -q -f name=cgswa_bot) \
-  env OPENWA_BASE_URL=http://cgswa_openwa:2785/api \
+  env OPENWA_BASE_URL=http://cgswa-openwa:2785/api \
       OPENWA_API_KEY="$OPENWA_API_KEY" \
       OPENWA_SESSION_ID="$OPENWA_SESSION_ID" \
       WEBHOOK_SECRET="$WEBHOOK_SECRET" \
-      BOT_WEBHOOK_URL=http://cgswa_bot:3000/webhook \
+      BOT_WEBHOOK_URL=http://cgswa-bot:3000/webhook \
       node scripts/provision.js
 ```
 
@@ -235,10 +235,10 @@ docker exec -i $(docker ps -q -f name=cgswa_bot) \
 ```
 ✓ Sesion creada
 ✓ Sesion arrancada
-✓ Webhook registrado → http://cgswa_bot:3000/webhook
+✓ Webhook registrado → http://cgswa-bot:3000/webhook
 ```
 
-> Si da **400 por SSRF**: confirma que `SSRF_ALLOWED_HOSTS=cgswa_bot,bot` sigue
+> Si da **400 por SSRF**: confirma que `SSRF_ALLOWED_HOSTS=cgswa-bot,bot` sigue
 > en el stack y que `cgswa_bot` está corriendo.
 
 ---

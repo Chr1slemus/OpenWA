@@ -76,7 +76,11 @@ services:
       # documenta OpenWA). Incluimos las dos formas en que Swarm resuelve el
       # servicio: el nombre corto y el cualificado por stack.
       WEBHOOK_SSRF_PROTECT: "true"
-      SSRF_ALLOWED_HOSTS: cgswa_bot,bot
+      # Se usa el alias con GUION, no cgswa_bot: OpenWA valida la URL del
+      # webhook con @IsUrl(), y un guion bajo no es valido en un nombre de
+      # host, asi que el nombre DNS que Swarm genera (<stack>_<servicio>)
+      # se rechaza con 400 antes de llegar al guardia SSRF.
+      SSRF_ALLOWED_HOSTS: cgswa-bot,bot
 
       # --- Limites de la API ---
       RATE_LIMIT_MEDIUM_TTL: "60000"
@@ -89,7 +93,9 @@ services:
       - openwa-data:/app/data
 
     networks:
-      - sgs
+      sgs:
+        aliases:
+          - cgswa-openwa
 
     # Chromium necesita cerrar ordenadamente: un SIGKILL a los 10s (el default)
     # puede dejar corrupto el perfil de sesion en el volumen.
@@ -166,8 +172,9 @@ services:
       LOG_LEVEL: info
       TZ: America/Mexico_City
 
-      # DNS interno de Swarm: <stack>_<servicio>.
-      OPENWA_BASE_URL: http://cgswa_openwa:2785/api
+      # Alias de red con guion (ver aliases mas abajo), no el nombre que genera
+      # Swarm: asi ninguna URL del sistema lleva guion bajo.
+      OPENWA_BASE_URL: http://cgswa-openwa:2785/api
       OPENWA_API_KEY: ${OPENWA_API_KEY}
       OPENWA_SESSION_ID: ${OPENWA_SESSION_ID:-cgs-main}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
@@ -202,7 +209,13 @@ services:
       BUSINESS_HOURS_END: "18"
 
     networks:
-      - sgs
+      sgs:
+        # Swarm registra el servicio como 'cgswa_bot', pero un guion bajo no es
+        # valido en un nombre de host y OpenWA rechaza esa URL de webhook con
+        # 400. Este alias da un nombre DNS valido y lo bastante especifico para
+        # no chocar con otros stacks en la red compartida.
+        aliases:
+          - cgswa-bot
 
     logging:
       driver: json-file

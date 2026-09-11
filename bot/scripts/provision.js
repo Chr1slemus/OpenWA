@@ -10,7 +10,7 @@
  *   OPENWA_API_KEY=... \
  *   OPENWA_SESSION_ID=cgs-main \
  *   WEBHOOK_SECRET=... \
- *   BOT_WEBHOOK_URL=http://cgs-wa-bot:3000/webhook \
+ *   BOT_WEBHOOK_URL=http://cgswa-bot:3000/webhook \
  *   node scripts/provision.js
  */
 
@@ -18,7 +18,10 @@ const BASE_URL = (process.env.OPENWA_BASE_URL ?? 'http://localhost:2785/api').re
 const API_KEY = process.env.OPENWA_API_KEY;
 const SESSION_ID = process.env.OPENWA_SESSION_ID ?? 'cgs-main';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
-const WEBHOOK_URL = process.env.BOT_WEBHOOK_URL ?? 'http://cgs-wa-bot:3000/webhook';
+// Alias de red con GUION, no el 'cgswa_bot' que genera Swarm: OpenWA valida
+// la URL con @IsUrl() y un guion bajo no es valido en un nombre de host, asi
+// que esa URL se rechazaria con 400 antes de llegar al guardia SSRF.
+const WEBHOOK_URL = process.env.BOT_WEBHOOK_URL ?? 'http://cgswa-bot:3000/webhook';
 
 const EVENTS = [
   'message.received',

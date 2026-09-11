@@ -7,11 +7,11 @@ Entrypoint HTTPS `websecure`, certresolver `letsencryptresolver`, provider `swar
 > el instalador detecta estos valores solo y no hace falta que los copies a mano.
 
 ```
-Internet ──443──▶ Traefik ──CGS──▶ cgswa_openwa:2785   (dashboard + API)
+Internet ──443──▶ Traefik ──CGS──▶ cgswa-openwa:2785   (dashboard + API)
                                         ▲     │
                           webhook firmado│     │REST
                                         │     ▼
-                                    cgswa_bot:3000     (sin publicar)
+                                    cgswa-bot:3000     (sin publicar)
 ```
 
 ---
@@ -166,11 +166,11 @@ todavía no existe.
 
 ```bash
 docker exec -it $(docker ps -q -f name=cgswa_bot) \
-  env OPENWA_BASE_URL=http://cgswa_openwa:2785/api \
+  env OPENWA_BASE_URL=http://cgswa-openwa:2785/api \
       OPENWA_API_KEY=tu_clave_operator \
       OPENWA_SESSION_ID=cgs-main \
       WEBHOOK_SECRET=el_mismo_del_stack \
-      BOT_WEBHOOK_URL=http://cgswa_bot:3000/webhook \
+      BOT_WEBHOOK_URL=http://cgswa-bot:3000/webhook \
       node scripts/provision.js
 ```
 
@@ -237,7 +237,7 @@ nunca se probó no es un respaldo.
 | Traefik devuelve **404** | El router no se registró. Casi siempre: las etiquetas quedaron fuera de `deploy.labels`, o Traefik usa el provider `docker` en vez de `swarm` (ver "Verificar el provider" abajo) |
 | Certificado inválido o "TRAEFIK DEFAULT CERT" | El DNS aún no apunta a `62.169.16.23`, o el nombre del certresolver no coincide (en este servidor es `letsencryptresolver`). Verifica con `docker service logs traefik` |
 | El servicio del bot no arranca: `No such image` | Swarm buscó la imagen en un registro. Despliega por CLI con `--resolve-image never`, o publica la imagen en un registro |
-| Registrar el webhook da **400** | El guardia SSRF. Confirma `SSRF_ALLOWED_HOSTS=cgswa_bot,bot` y que el servicio `cgswa_bot` esté corriendo — el DNS se resuelve al registrar |
+| Registrar el webhook da **400** | El guardia SSRF. Confirma `SSRF_ALLOWED_HOSTS=cgswa-bot,bot` y que el servicio `cgswa_bot` esté corriendo — el DNS se resuelve al registrar |
 | `Firma de webhook invalida` en los logs | El `WEBHOOK_SECRET` del stack no coincide con el `secret` del webhook registrado. Vuelve a registrarlo |
 | Tras un redespliegue pide QR otra vez | El volumen no persistió. Comprueba que montas `/app/data` completo, no solo `/app/data/sessions` |
 | La tarea se reinicia en bucle sin log claro | `docker service ps cgswa_openwa --no-trunc`. Si es OOM, sube el límite de 2G |

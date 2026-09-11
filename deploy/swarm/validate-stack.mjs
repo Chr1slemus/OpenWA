@@ -81,15 +81,35 @@ check('bot con traefik.enable=false', svc.bot.deploy.labels.includes('traefik.en
 check('bot sin ports publicados', svc.bot.ports === undefined);
 check('openwa sin ports publicados (solo via Traefik)', svc.openwa.ports === undefined);
 
+console.log('\n--- Nombres de host validos ---');
+// Swarm nombra los servicios <stack>_<servicio>, pero un guion bajo NO es
+// valido en un nombre de host: OpenWA valida la URL del webhook con @IsUrl()
+// y la rechaza con 400. Por eso cada servicio declara un alias con guion.
+const aliasesOf = (s) => svc[s].networks?.sgs?.aliases ?? [];
+check('el bot declara un alias de red sin guion bajo',
+  aliasesOf('bot').some((a) => !a.includes('_')),
+  `(${JSON.stringify(aliasesOf('bot'))})`);
+check('openwa declara un alias de red sin guion bajo',
+  aliasesOf('openwa').some((a) => !a.includes('_')),
+  `(${JSON.stringify(aliasesOf('openwa'))})`);
+
+const urlsEnStack = [...raw.matchAll(/https?:\/\/([A-Za-z0-9._-]+)/g)].map((m) => m[1]);
+const conGuionBajo = [...new Set(urlsEnStack.filter((h) => h.includes('_')))];
+check('ninguna URL del stack usa un host con guion bajo',
+  conGuionBajo.length === 0, `(${JSON.stringify(conGuionBajo)})`);
+
 console.log('\n--- Coherencia DNS / SSRF ---');
 const env = svc.openwa.environment;
 const botEnv = svc.bot.environment;
 const allowed = String(env.SSRF_ALLOWED_HOSTS).split(',').map((s) => s.trim());
-// El stack se llama cgswa => DNS <stack>_<servicio>
-check('SSRF permite cgswa_bot', allowed.includes('cgswa_bot'), `(${allowed})`);
+// El allowlist SSRF debe nombrar el mismo alias que se usa en la URL.
+check('SSRF permite el alias del bot',
+  aliasesOf('bot').some((a) => allowed.includes(a)),
+  `(allowlist=${JSON.stringify(allowed)} alias=${JSON.stringify(aliasesOf('bot'))})`);
 check('SSRF sigue ACTIVADO', env.WEBHOOK_SSRF_PROTECT === 'true');
 const baseUrl = String(botEnv.OPENWA_BASE_URL);
-check('el bot apunta a cgswa_openwa', baseUrl.includes('cgswa_openwa'), `(${baseUrl})`);
+check('el bot apunta al alias de openwa',
+  aliasesOf('openwa').some((a) => baseUrl.includes(a)), `(${baseUrl})`);
 check('la URL base del bot termina en /api', baseUrl.endsWith('/api'), `(${baseUrl})`);
 
 console.log('\n--- Trampas de configuracion de OpenWA ---');
