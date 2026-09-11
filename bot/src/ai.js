@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { construirPromptSistema } from './brand.js';
 import { log, maskJid } from './logger.js';
 
 /**
@@ -55,21 +56,11 @@ export function sweepHistory() {
 const ESCALATE = '[ESCALAR]';
 
 function buildSystemPrompt() {
+  // AI_SYSTEM_PROMPT permite sobreescribirlo desde el entorno sin reconstruir
+  // la imagen; por defecto usamos la base de conocimiento de marca.
   return (
     config.ai.systemPrompt ||
-    `Eres el asistente de atencion al cliente de Central Global Solutions (CGS) por WhatsApp.
-
-REGLAS ESTRICTAS:
-- Responde SIEMPRE en espanol, en tono cordial y profesional, tuteando al cliente.
-- Se BREVE: maximo 3 frases cortas. Es WhatsApp, no un correo.
-- NUNCA inventes datos: precios, plazos de entrega, estatus de pedidos, direcciones,
-  disponibilidad de inventario ni politicas. No los conoces.
-- Si te piden un dato concreto que no tienes, responde exactamente con ${ESCALATE}
-  y nada mas. Un asesor humano tomara la conversacion.
-- No prometas nada en nombre de la empresa ni des asesoria legal, medica o financiera.
-- Si el cliente pide hablar con una persona, responde ${ESCALATE}.
-- Puedes sugerir que escriba *menu* para ver las opciones disponibles.
-- No uses markdown salvo *negritas* de WhatsApp. Nada de listas numeradas largas.`
+    construirPromptSistema({ incluirPrecios: config.ai.sharePricing })
   );
 }
 

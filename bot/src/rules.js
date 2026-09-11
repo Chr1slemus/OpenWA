@@ -12,27 +12,31 @@
  *
  * Si ninguna coincide y AI_ENABLED=true, contesta la IA. Las reglas van
  * primero a proposito: son gratis, instantaneas y predecibles.
+ *
+ * VOZ: el texto de abajo sigue la seccion 4 del documento de marca. Calma,
+ * directa, sustantiva. Sin signos de exclamacion, sin rayas largas, sin
+ * urgencia comercial y casi sin emoji. Si editas, manten ese registro.
  */
 
 import { generateReply, clearHistory, sweepHistory } from './ai.js';
+import { HECHOS } from './brand.js';
 
-const MENU = `Hola 👋 Soy el asistente de *Central Global Solutions*.
+const MENU = `Soy el asistente de *Central Global Solutions*.
 
 Escribe el numero de lo que necesitas:
 
-*1* — Cotizacion
-*2* — Estado de mi pedido
-*3* — Soporte tecnico
-*4* — Hablar con un asesor
+*1* Mi empresa dejo de crecer y no se por que
+*2* Que hacemos y para quien
+*3* Agendar la llamada de diagnostico
+*4* Hablar con alguien del equipo
 
 Puedes escribir *menu* en cualquier momento para volver aqui.`;
 
 const FUERA_DE_HORARIO = `Gracias por escribir a *Central Global Solutions*.
 
-En este momento estamos fuera de horario de atencion.
-Nuestro horario es de *lunes a viernes, 9:00 a 18:00*.
+Estamos fuera de horario. Atendemos de lunes a viernes, de 9:00 a 18:00.
 
-Deja tu mensaje y te respondemos en cuanto abramos. 🙌`;
+Dejanos tu mensaje y alguien del equipo te responde al abrir.`;
 
 /**
  * Memoria de conversacion en RAM: chatId -> { step, updatedAt }.
@@ -77,7 +81,7 @@ export function normalize(text) {
     .trim();
 }
 
-const saludos = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'que tal'];
+const saludos = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'que tal', 'saludos'];
 
 /**
  * ctx = {
@@ -88,15 +92,15 @@ const saludos = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noche
 export const rules = [
   {
     name: 'fuera-de-horario',
-    // Solo interrumpe el flujo en el primer contacto; si el cliente ya esta
-    // dentro del menu, dejamos que termine lo que empezo.
+    // Solo interrumpe en el primer contacto. Si ya esta dentro del menu,
+    // dejamos que termine lo que empezo.
     match: (ctx) => !ctx.withinBusinessHours && !getState(ctx.chatId),
     reply: () => FUERA_DE_HORARIO,
   },
 
   {
     name: 'menu-explicito',
-    match: (ctx) => ['menu', 'menú', 'inicio', '0'].includes(ctx.text),
+    match: (ctx) => ['menu', 'inicio', 'opciones', '0'].includes(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
       return MENU;
@@ -108,8 +112,8 @@ export const rules = [
     match: (ctx) => saludos.some((s) => ctx.text === s || ctx.text.startsWith(`${s} `)),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
-      const nombre = ctx.senderName ? `, ${ctx.senderName.split(' ')[0]}` : '';
-      return MENU.replace('Hola 👋', `Hola${nombre} 👋`);
+      const nombre = ctx.senderName ? `Hola, ${ctx.senderName.split(' ')[0]}.` : 'Hola.';
+      return `${nombre} ${MENU}`;
     },
   },
 
@@ -119,17 +123,29 @@ export const rules = [
     reply: (ctx) => {
       switch (ctx.text) {
         case '1':
-          setState(ctx.chatId, 'cotizacion');
-          return 'Con gusto preparamos tu cotizacion 📄\n\nCuentame en un mensaje:\n• Que producto o servicio necesitas\n• Cantidad aproximada\n• Ciudad de entrega';
+          setState(ctx.chatId, 'sintoma');
+          // No diagnosticamos aqui. Solo ayudamos a precisar el sintoma, que
+          // es lo que hace util la llamada posterior.
+          return `Ese es exactamente el problema que trabajamos: la mayoria de empresas siente el sintoma pero no ubica la causa.
+
+Cuentanos en un mensaje que estas viendo. Por ejemplo: ventas planas, rotacion de personal, margenes que se encogen, proyectos que no cierran.`;
         case '2':
-          setState(ctx.chatId, 'pedido');
-          return 'Perfecto. Enviame tu *numero de pedido* (por ejemplo CGS-10245) y lo reviso en seguida. 🔎';
+          setState(ctx.chatId, 'servicios');
+          return `${HECHOS.mantra} En ese orden.
+
+Trabajamos con empresas establecidas que llevan anos sin crecer, sobre todo en finanzas, salud, seguros y manufactura. ${HECHOS.trayectoria}
+
+Tenemos tres formas de trabajar: un diagnostico inicial, una consultoria estrategica completa y un acompanamiento continuo. Escribe *3* si quieres que conversemos cual encaja.`;
         case '3':
-          setState(ctx.chatId, 'soporte');
-          return 'Lamento el inconveniente 🛠️\n\nDescribeme el problema con el mayor detalle posible. Si puedes, adjunta una foto o captura de pantalla.';
+          setState(ctx.chatId, 'asesor');
+          return `Con gusto. El primer paso es una llamada de 15 a 20 minutos, sin costo ni compromiso.
+
+Dejanos tu nombre, tu empresa y dos horarios que te acomoden. ${HECHOS.tiempoRespuesta}`;
         case '4':
           setState(ctx.chatId, 'asesor');
-          return 'Listo, ya avise a un asesor humano 🙋\n\nEn breve te escribe por este mismo chat. El bot deja de responder aqui para no interrumpir.';
+          return `Listo. Ya avisamos a alguien del equipo.
+
+${HECHOS.tiempoRespuesta} Dejanos aqui el contexto que quieras adelantar.`;
         default:
           return null;
       }
@@ -137,53 +153,59 @@ export const rules = [
   },
 
   {
-    name: 'numero-de-pedido',
-    match: (ctx) => getState(ctx.chatId)?.step === 'pedido' && /cgs[- ]?\d{4,}/i.test(ctx.text),
+    name: 'sintoma-descrito',
+    match: (ctx) => getState(ctx.chatId)?.step === 'sintoma' && ctx.body.length > 25,
     reply: (ctx) => {
-      const pedido = ctx.body.match(/CGS[- ]?\d{4,}/i)?.[0]?.toUpperCase();
-      clearState(ctx.chatId);
-      // Aqui es donde conectarias tu ERP / base de datos real.
-      return `Recibido. Estoy consultando el pedido *${pedido}*.\n\nUn asesor te confirma el estatus en unos minutos. 📦`;
+      // Deliberadamente NO devolvemos una hipotesis. Nombrar la causa es el
+      // trabajo que se cobra, y hacerlo sin observacion directa seria adivinar.
+      setState(ctx.chatId, 'asesor');
+      clearHistory(ctx.chatId);
+      return `Gracias. Lo que describes puede tener varias causas, y acertar sin ver la operacion por dentro seria adivinar.
+
+Esa es justo la conversacion de la llamada de diagnostico: 15 a 20 minutos, sin costo. Dejanos tu nombre, tu empresa y dos horarios que te acomoden.`;
+    },
+  },
+
+  {
+    name: 'precio',
+    match: (ctx) => /\b(precio|costo|cuanto cuesta|cuanto vale|tarifa|honorarios|cotizacion)\b/.test(ctx.text),
+    reply: (ctx) => {
+      setState(ctx.chatId, 'asesor');
+      return `Depende del alcance, y el alcance no se puede definir sin entender primero el problema. Darte una cifra ahora seria inventarla.
+
+La llamada de diagnostico es justamente para eso, y no tiene costo. Dejanos tu nombre, tu empresa y dos horarios que te acomoden.`;
     },
   },
 
   {
     name: 'agradecimiento',
-    match: (ctx) => ['gracias', 'muchas gracias', 'ok gracias', 'perfecto gracias'].includes(ctx.text),
+    match: (ctx) => ['gracias', 'muchas gracias', 'ok gracias', 'perfecto gracias', 'listo gracias'].includes(ctx.text),
     reply: (ctx) => {
       clearState(ctx.chatId);
-      return 'Con gusto 🙌 Si necesitas algo mas, escribe *menu*.';
+      clearHistory(ctx.chatId);
+      return 'Con gusto. Si necesitas algo mas, escribe *menu*.';
     },
   },
 
   {
     name: 'media-sin-texto',
     match: (ctx) => ctx.type !== 'chat' && !ctx.body,
-    reply: () => 'Recibi tu archivo 📎 Dame un momento, un asesor lo revisa y te responde.',
+    reply: (ctx) => {
+      setState(ctx.chatId, 'asesor');
+      return `Recibimos tu archivo. Alguien del equipo lo revisa y te responde.`;
+    },
   },
 ];
 
-const ESCALADO =
-  'Dejame conectarte con un asesor 🙋 En breve te escribe por este mismo chat.';
+const ESCALADO = `Vamos a pasarte con alguien del equipo. ${HECHOS.tiempoRespuesta}`;
 
 /** Respuesta cuando ninguna regla coincidio. */
 export async function fallback(ctx) {
   const current = getState(ctx.chatId);
 
-  // Si el cliente pidio un asesor humano, el bot se calla. Nada peor que un
-  // bot insistiendo cuando ya pidio hablar con una persona.
+  // Si ya pidio hablar con una persona, el bot se calla. Nada peor que un bot
+  // insistiendo cuando el cliente ya pidio un humano.
   if (current?.step === 'asesor') return { rule: 'silencio-asesor', text: null };
-
-  // Si esta en medio de un flujo, tomamos su mensaje como la informacion
-  // pedida y lo escalamos, en vez de repetirle el menu.
-  if (current && current.step !== 'menu') {
-    clearState(ctx.chatId);
-    clearHistory(ctx.chatId);
-    return {
-      rule: 'flujo-completado',
-      text: 'Gracias por la informacion ✅ Ya la pase con el area correspondiente, te contactan en breve.',
-    };
-  }
 
   // Ultimo recurso: la IA. Solo llega aqui lo que las reglas no anticiparon.
   const ai = await generateReply(ctx);
@@ -201,14 +223,14 @@ export async function fallback(ctx) {
   // La IA esta apagada o fallo: el menu deterministico sigue ahi. El cliente
   // nunca se queda sin respuesta por un problema del proveedor de IA.
   setState(ctx.chatId, 'menu');
-  return { rule: 'fallback-menu', text: `No estoy seguro de haber entendido 🤔\n\n${MENU}` };
+  return { rule: 'fallback-menu', text: `No estoy seguro de haber entendido.\n\n${MENU}` };
 }
 
 /** Resuelve el texto de respuesta para un mensaje. null = no responder. */
 export async function resolveReply(ctx) {
   for (const rule of rules) {
     if (rule.match(ctx)) {
-      // `reply` puede ser async: asi una regla puede consultar tu ERP.
+      // `reply` puede ser async: asi una regla puede consultar tu CRM.
       const text = await rule.reply(ctx);
       return { rule: rule.name, text };
     }

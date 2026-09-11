@@ -129,8 +129,15 @@ export const config = {
     timeoutMs: int('AI_TIMEOUT_MS', 8000),
     // Recorte de la entrada del usuario antes de pagarla como tokens.
     maxInputChars: int('AI_MAX_INPUT_CHARS', 1000),
-    // Deja vacio para usar el prompt por defecto de ai.js.
+    // Deja vacio para usar el prompt construido desde brand.js.
     systemPrompt: optional('AI_SYSTEM_PROMPT', ''),
+    // ¿Puede el bot dar rangos de precio por WhatsApp?
+    // Por defecto NO. El documento de marca autoriza dar un rango "segun el
+    // alcance que va emergiendo", pero eso describe la llamada de
+    // descubrimiento, donde ya se definio el problema. En un primer contacto
+    // por WhatsApp no hay alcance todavia, asi que una cifra suelta solo sirve
+    // para que la comparen. Ponlo en true si prefieres anclar precio antes.
+    sharePricing: bool('AI_SHARE_PRICING', false),
   },
 
   // Cuantas claves de idempotencia recordar para descartar reentregas.

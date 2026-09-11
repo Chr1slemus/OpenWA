@@ -90,10 +90,10 @@ r = await post(msg());
 check('firma valida -> 200', r.status === 200, `(recibido ${r.status})`);
 await settle();
 check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`);
-check('la respuesta es el menu', sends()[0]?.body?.text?.includes('Cotizacion'));
+check('la respuesta es el menu', sends()[0]?.body?.text?.includes('dejo de crecer'));
 check(
   'saluda por el nombre',
-  sends()[0]?.body?.text?.startsWith('Hola, Chris'),
+  sends()[0]?.body?.text?.includes('Hola, Chris'),
   `(texto: ${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`,
 );
 check('marco como leido', calls.some((c) => c.path.includes('/chats/read')));
@@ -130,12 +130,12 @@ calls.length = 0;
 const cliente = '5215599998888@c.us';
 await post(msg({ chatId: cliente, from: cliente, body: 'hola' }));
 await settle();
-await post(msg({ chatId: cliente, from: cliente, body: '2' }));
+await post(msg({ chatId: cliente, from: cliente, body: '1' }));
 await settle();
-check('opcion 2 pide el numero de pedido', sends()[1]?.body?.text?.includes('numero de pedido'));
-await post(msg({ chatId: cliente, from: cliente, body: 'Mi pedido es CGS-10245' }));
+check('opcion 1 pide describir el sintoma', sends()[1]?.body?.text?.includes('Que estas viendo') || sends()[1]?.body?.text?.includes('que estas viendo'));
+
 await settle();
-check('reconoce el folio CGS-10245', sends()[2]?.body?.text?.includes('CGS-10245'));
+
 
 console.log('\n--- Escalamiento a humano ---');
 calls.length = 0;
@@ -200,7 +200,8 @@ check('la IA contesta cuando ninguna regla coincide',
   sends()[0]?.body?.text === 'Claro, con gusto te ayudo con eso.',
   `(${JSON.stringify(sends()[0]?.body?.text)})`);
 check('el prompt de sistema prohibe inventar',
-  aiCalls[0]?.messages?.[0]?.content?.includes('NUNCA inventes'));
+  /NO inventes/i.test(aiCalls[0]?.messages?.[0]?.content ?? ''),
+  `(${JSON.stringify((aiCalls[0]?.messages?.[0]?.content ?? '').slice(0, 60))})`);
 
 // La IA NO debe usarse cuando una regla si coincide.
 const antesDeSaludo = aiCalls.length;
@@ -213,10 +214,12 @@ check('una regla determinista NO gasta llamada a la IA', aiCalls.length === ante
 aiMode = 'escalate';
 calls.length = 0;
 const escCli = '5215566665555@c.us';
-await post(msg({ chatId: escCli, from: escCli, body: 'cuanto cuesta exactamente el servicio' }));
+// Frase que no coincide con ninguna regla determinista, para que llegue a la IA.
+// "cuanto cuesta" ya no sirve: lo atrapa antes la regla de precio, a proposito.
+await post(msg({ chatId: escCli, from: escCli, body: 'trabajan tambien los fines de semana' }));
 await settle();
-check('[ESCALAR] deriva a un asesor',
-  sends()[0]?.body?.text?.includes('asesor'),
+check('[ESCALAR] deriva a una persona del equipo',
+  sends()[0]?.body?.text?.includes('alguien del equipo'),
   `(${JSON.stringify(sends()[0]?.body?.text)})`);
 const antesDeInsistir = sends().length;
 await post(msg({ chatId: escCli, from: escCli, body: 'sigues ahi?' }));
@@ -230,7 +233,7 @@ const errCli = '5215577778888@c.us';
 await post(msg({ chatId: errCli, from: errCli, body: 'una consulta cualquiera' }));
 await settle();
 check('si la IA da error, responde el menu',
-  sends()[0]?.body?.text?.includes('Cotizacion'),
+  sends()[0]?.body?.text?.includes('dejo de crecer'),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'timeout';
@@ -239,11 +242,66 @@ const toCli = '5215599991111@c.us';
 await post(msg({ chatId: toCli, from: toCli, body: 'otra consulta cualquiera' }));
 await new Promise((r) => setTimeout(r, 1500));
 check('si la IA hace timeout, responde el menu',
-  sends()[0]?.body?.text?.includes('Cotizacion'),
+  sends()[0]?.body?.text?.includes('dejo de crecer'),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'ok';
 aiCfg.enabled = false;
+
+console.log('\n--- Marca: nada interno se filtra ---');
+const { construirPromptSistema } = await import('../src/brand.js');
+const prompt = construirPromptSistema();
+const promptBajo = prompt.toLowerCase();
+
+// El documento de marca es confidencial. Estos terminos son juicios internos
+// sobre prospectos o cifras de negocio: no deben existir en el prompt, porque
+// un modelo con eso en contexto acaba repitiendolo.
+const FUGAS = [
+  'sabelotodo', 'know-it-all', 'negociador', 'validador', 'politico', 'sonador',
+  'anti-cliente', 'anti-customer', 'margen', 'descartar', 'descalifica',
+  '5m', '150 empleados', 'segmentacion', 'capataz',
+];
+const filtradas = FUGAS.filter((t) => promptBajo.includes(t));
+check('el prompt no contiene terminos internos', filtradas.length === 0, `(${JSON.stringify(filtradas)})`);
+
+// Palabras que el documento prohibe explicitamente (seccion 3.8 y 4.4).
+const PROHIBIDAS = ['innovador', 'disruptiv', 'vanguardia', 'sinergia', 'valor agregado'];
+const usadas = PROHIBIDAS.filter((t) => {
+  const i = promptBajo.indexOf(t);
+  // Aparecen en la lista de prohibiciones, no como descripcion de CGS.
+  return i >= 0 && !promptBajo.slice(Math.max(0, i - 220), i).includes('prohibid');
+});
+check('no describe a CGS con palabras vetadas', usadas.length === 0, `(${JSON.stringify(usadas)})`);
+
+check('prohibe diagnosticar por WhatsApp', /no diagnostiques/i.test(prompt));
+check('protege la metodologia', /no expliques como trabajamos/i.test(prompt));
+check('prohibe inventar datos', /no inventes/i.test(prompt));
+check('define el escalamiento', prompt.includes('[ESCALAR]'));
+check('sin precios por defecto', !prompt.includes('20,000'));
+check('con precios si se activa',
+  construirPromptSistema({ incluirPrecios: true }).includes('20,000'));
+
+console.log('\n--- Marca: estilo del texto deterministico ---');
+const { rules: reglas } = await import('../src/rules.js');
+// El documento prohibe rayas largas (4.4) y la urgencia comercial.
+const textos = [];
+for (const chat of ['a@c.us', 'b@c.us', 'c@c.us']) {
+  for (const cuerpo of ['hola', 'menu', 'cuanto cuesta', 'gracias']) {
+    const r = await (await import('../src/rules.js')).resolveReply({
+      chatId: chat, body: cuerpo, text: cuerpo, type: 'chat',
+      isGroup: false, senderName: null, messageId: 'x', withinBusinessHours: true,
+    });
+    if (r.text) textos.push(r.text);
+  }
+}
+check('sin rayas largas (em dash)', !textos.some((t) => /[—–]/.test(t)),
+  `(${JSON.stringify(textos.find((t) => /[—–]/.test(t))?.slice(0, 60))})`);
+check('sin signos de exclamacion', !textos.some((t) => t.includes('!')));
+check('sin urgencia comercial',
+  !textos.some((t) => /(aprovecha|tiempo limitado|promocion|descuento)/i.test(t)));
+check('el menu ofrece la llamada de diagnostico',
+  textos.some((t) => t.includes('Agendar la llamada')));
+check('no da cifras de precio', !textos.some((t) => /\d{3},\d{3}|\$\s?\d/.test(t)));
 
 console.log('\n--- Health ---');
 r = await fetch(`http://127.0.0.1:${BOT_PORT}/health`);
