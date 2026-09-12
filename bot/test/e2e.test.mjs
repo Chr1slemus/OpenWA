@@ -26,6 +26,10 @@ process.env.OPENWA_SESSION_ID = 'test-session';
 process.env.WEBHOOK_SECRET = SECRET;
 process.env.SIMULATE_TYPING = 'false';
 process.env.LOG_LEVEL = 'error';
+// La suite entera comparte una sola instancia del bot, y con ella el cupo
+// GLOBAL de envios (no solo el de por-chat). El default de produccion (20)
+// se queda corto para todas las conversaciones que arma este archivo.
+process.env.MAX_REPLIES_GLOBAL = '200';
 await import('../src/server.js');
 await new Promise((r) => setTimeout(r, 400));
 
@@ -133,6 +137,19 @@ await settle();
 await post(msg({ chatId: cliente, from: cliente, body: '1' }));
 await settle();
 check('opcion 1 pide describir el sintoma', /est[aá]s viendo/i.test(sends()[1]?.body?.text ?? ''));
+
+// Regresion: la opcion 2 invita a "escribe 3", asi que el "3" que sigue debe
+// seguir cayendo en el menu, no perderse en un estado intermedio.
+const cli3 = '5215599997777@c.us';
+await post(msg({ chatId: cli3, from: cli3, body: 'hola' }));
+await settle();
+await post(msg({ chatId: cli3, from: cli3, body: '2' }));
+await settle();
+await post(msg({ chatId: cli3, from: cli3, body: '3' }));
+await settle();
+check('tras la opcion 2, el "3" sigue llevando a agendar',
+  sends().at(-1)?.body?.text?.includes('calendly.com'),
+  `(${JSON.stringify(sends().at(-1)?.body?.text?.slice(0, 40))})`);
 
 await settle();
 

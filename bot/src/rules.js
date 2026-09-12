@@ -161,7 +161,10 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
 
 Cuéntame qué estás viendo. Ventas planas, rotación, márgenes que se encogen, proyectos que no cierran.`;
         case '2':
-          setState(ctx.chatId, 'servicios');
+          // Se queda en 'menu', no en un paso nuevo: la respuesta invita a
+          // escribir *3* a continuacion, y eso solo funciona si el estado
+          // sigue siendo 'menu' cuando llega ese digito.
+          setState(ctx.chatId, 'menu');
           return `${HECHOS.mantra} En ese orden.
 
 Trabajamos con empresas establecidas que llevan años sin crecer, sobre todo en ${HECHOS.sectores.slice(0, 3).join(', ').toLowerCase()} y manufactura. ${HECHOS.trayectoriaFirma}
