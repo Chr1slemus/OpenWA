@@ -132,7 +132,7 @@ await post(msg({ chatId: cliente, from: cliente, body: 'hola' }));
 await settle();
 await post(msg({ chatId: cliente, from: cliente, body: '1' }));
 await settle();
-check('opcion 1 pide describir el sintoma', sends()[1]?.body?.text?.includes('Que estas viendo') || sends()[1]?.body?.text?.includes('que estas viendo'));
+check('opcion 1 pide describir el sintoma', /est[aá]s viendo/i.test(sends()[1]?.body?.text ?? ''));
 
 await settle();
 
@@ -253,20 +253,20 @@ const { construirPromptSistema: cps } = await import('../src/brand.js');
 const p0 = cps();
 
 check('se presenta como representacion virtual, no como Christian',
-  /representacion virtual/i.test(p0) && /no Christian Lemus/i.test(p0));
+  /representaci[oó]n virtual/i.test(p0) && /no Christian Lemus/i.test(p0));
 check('prohibe afirmar ser humano', /Nunca afirmes ser humano/i.test(p0));
 // El perfil venia escrito para el avatar del sitio. En WhatsApp estas tres
 // instrucciones se invierten, y es el error mas facil de cometer al portarlo.
 // Ojo: la frase SI aparece, pero prohibida. Comprobar solo su ausencia daria
 // un falso negativo, que es como se cuelan los errores de adaptacion de canal.
 check('prohibe mandar a una "seccion de contacto"',
-  /ni le digas que vaya a una "seccion de contacto"/i.test(p0));
+  /ni le digas que vaya a una "secci[oó]n de contacto"/i.test(p0));
 check('no ofrece el numero de WhatsApp (ya escriben por ahi)',
   !p0.includes('6060 5993'), '(se lo estarian dando a quien ya lo uso)');
 check('comparte el enlace de agenda', p0.includes('calendly.com/chris-lemus/cgs'));
 check('pide el correo', /pide su correo/i.test(p0));
 check('corta ante conducta impropia', /CONDUCTA IMPROPIA/i.test(p0));
-check('no entrega la solucion', /NO des la solucion/i.test(p0));
+check('no entrega la solucion', /NO des la soluci[oó]n/i.test(p0));
 
 console.log('\n--- Captura de correo y corte ---');
 const { resolveReply: rr } = await import('../src/rules.js');
@@ -294,7 +294,7 @@ check('la conversacion cerrada no se reabre sola', rMal2.text === null, `(${rMal
 
 const rPrecio = await rr(ctxBase('precio@c.us', 'cuanto cuesta el servicio'));
 check('precio lleva a la llamada, sin cifra',
-  rPrecio.text.includes('calendly.com') && !/\$|100 dolares/.test(rPrecio.text));
+  rPrecio.text.includes('calendly.com') && !/\$|100 d[oó]lares/.test(rPrecio.text));
 
 console.log('\n--- Marca: nada interno se filtra ---');
 const { construirPromptSistema } = await import('../src/brand.js');
@@ -322,13 +322,13 @@ const usadas = PROHIBIDAS.filter((t) => {
 check('no describe a CGS con palabras vetadas', usadas.length === 0, `(${JSON.stringify(usadas)})`);
 
 check('el diagnostico requiere ver la operacion',
-  /requiere ver la operacion por dentro/i.test(prompt));
-check('protege la metodologia', /no expliques como trabajamos/i.test(prompt));
+  /requiere ver la operaci[oó]n por dentro/i.test(prompt));
+check('protege la metodologia', /no expliques c[oó]mo trabajamos/i.test(prompt));
 check('prohibe inventar datos', /no inventes/i.test(prompt));
 check('define el escalamiento', prompt.includes('[ESCALAR]'));
-check('sin tarifa por defecto', !prompt.includes('100 dolares'));
+check('sin tarifa por defecto', !prompt.includes('100 dólares'));
 check('con tarifa si se activa',
-  construirPromptSistema({ incluirPrecios: true }).includes('100 dolares la hora'));
+  construirPromptSistema({ incluirPrecios: true }).includes('100 dólares la hora'));
 
 console.log('\n--- Marca: estilo del texto deterministico ---');
 const { rules: reglas } = await import('../src/rules.js');

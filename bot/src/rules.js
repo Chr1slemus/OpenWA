@@ -2,8 +2,8 @@
  * ---------------------------------------------------------------------------
  * ESTE ES EL ARCHIVO QUE VAS A EDITAR EL 90% DEL TIEMPO.
  * ---------------------------------------------------------------------------
- * Logica conversacional. Todo lo demas (firma, reintentos, limites, red) ya
- * esta resuelto y no deberias necesitar tocarlo.
+ * Lógica conversacional. Todo lo demás (firma, reintentos, límites, red) ya
+ * está resuelto y no deberías necesitar tocarlo.
  *
  * Cada regla es: { name, match(ctx), reply(ctx) }
  *  - match: true si la regla aplica al mensaje.
@@ -11,9 +11,9 @@
  * Gana la PRIMERA que coincide. Si ninguna lo hace y AI_ENABLED=true,
  * contesta la IA: las reglas van primero porque son gratis y predecibles.
  *
- * VOZ: sigue el perfil de Christian Lemus y la seccion 4 del documento de
+ * VOZ: sigue el perfil de Christian Lemus y la sección 4 del documento de
  * marca. Directa, llana, sin adorno. Sin exclamaciones, sin rayas largas, sin
- * urgencia comercial, casi sin emoji. Si editas, manten ese registro.
+ * urgencia comercial, casi sin emoji. Si editas, mantén ese registro.
  */
 
 import { generateReply, clearHistory, sweepHistory } from './ai.js';
@@ -28,19 +28,19 @@ const MENU = `Soy Chris, de *Central Global Solutions*.
 *2* Quiero saber qué servicios ofrecen
 *3* Quiero agendar una videollamada
 
-Escribe *menu* si quieres iniciar de nuevo en cualquier momento.`;
+Escribe *menú* si quieres iniciar de nuevo en cualquier momento.`;
 
 const FUERA_DE_HORARIO = `Gracias por escribir a *Central Global Solutions*.
 
 Estamos fuera de horario. Atendemos de lunes a viernes, de 9:00 a 18:00.
 
-Si prefieres, agenda directo aqui: ${HECHOS.calendly}`;
+Si prefieres, agenda directo aquí: ${HECHOS.calendly}`;
 
 const AGENDA = `La llamada es de 15 minutos, sin costo ni compromiso. Christian la toma en persona.
 
-Agenda aqui: ${HECHOS.calendly}
+Agenda aquí: ${HECHOS.calendly}
 
-Dejame tu correo y te mando la confirmacion y lo que conversemos despues.`;
+Déjame tu correo y te mando la confirmación y lo que conversemos después.`;
 
 /** chatId -> { step, email, updatedAt }. Se pierde al reiniciar el contenedor. */
 const state = new Map();
@@ -86,8 +86,8 @@ const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 
 const saludos = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'que tal', 'saludos'];
 
-// Corte por conducta impropia. Lista corta y explicita: preferimos dejar pasar
-// un caso dudoso a la IA antes que cortarle la conversacion a un cliente real
+// Corte por conducta impropia. Lista corta y explícita: preferimos dejar pasar
+// un caso dudoso a la IA antes que cortarle la conversación a un cliente real
 // por un falso positivo.
 const OFENSIVO = /\b(put[oa]s?|mierda|imbecil|idiota|estupid[oa]|pendej[oa]|maric[oa]n|verga|culer[oa]|jodete|vete a la)\b/i;
 
@@ -99,13 +99,13 @@ export const rules = [
       log.warn('Conversacion cerrada por conducta impropia', { chatId: maskJid(ctx.chatId) });
       setState(ctx.chatId, 'cerrado');
       clearHistory(ctx.chatId);
-      return 'Aqui lo dejamos. Si mas adelante quieres conversar de negocios, con gusto.';
+      return 'Aquí lo dejamos. Si más adelante quieres conversar de negocios, con gusto.';
     },
   },
 
   {
     name: 'conversacion-cerrada',
-    // Una vez cerrada, no se reabre sola. Solo un "menu" explicito la reinicia.
+    // Una vez cerrada, no se reabre sola. Solo un "menu" explícito la reinicia.
     match: (ctx) => getState(ctx.chatId)?.step === 'cerrado' && ctx.text !== 'menu',
     reply: () => null,
   },
@@ -118,14 +118,14 @@ export const rules = [
 
   {
     name: 'captura-correo',
-    // El correo es el activo de la conversacion: permite mandar propuesta y
-    // documentacion. Se detecta en cualquier momento, no solo cuando se pide.
+    // El correo es el activo de la conversación: permite mandar propuesta y
+    // documentación. Se detecta en cualquier momento, no solo cuando se pide.
     match: (ctx) => EMAIL_RE.test(ctx.body) && !getState(ctx.chatId)?.email,
     reply: (ctx) => {
       const email = ctx.body.match(EMAIL_RE)[0];
       setState(ctx.chatId, getState(ctx.chatId)?.step ?? 'menu', { email });
       log.info('Correo capturado', { chatId: maskJid(ctx.chatId) });
-      return `Anotado. Te escribo ahi.
+      return `Anotado. Te escribo ahí.
 
 Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calendly}`;
     },
@@ -157,16 +157,16 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
       switch (ctx.text) {
         case '1':
           setState(ctx.chatId, 'sintoma');
-          return `Ese es el problema que trabajamos. Casi todas las empresas sienten el sintoma, muy pocas ubican la causa.
+          return `Ese es el problema que trabajamos. Casi todas las empresas sienten el síntoma, muy pocas ubican la causa.
 
-Cuentame que estas viendo. Ventas planas, rotacion, margenes que se encogen, proyectos que no cierran.`;
+Cuéntame qué estás viendo. Ventas planas, rotación, márgenes que se encogen, proyectos que no cierran.`;
         case '2':
           setState(ctx.chatId, 'servicios');
           return `${HECHOS.mantra} En ese orden.
 
-Trabajamos con empresas establecidas que llevan anos sin crecer, sobre todo en ${HECHOS.sectores.slice(0, 3).join(', ').toLowerCase()} y manufactura. ${HECHOS.trayectoriaFirma}
+Trabajamos con empresas establecidas que llevan años sin crecer, sobre todo en ${HECHOS.sectores.slice(0, 3).join(', ').toLowerCase()} y manufactura. ${HECHOS.trayectoriaFirma}
 
-Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoria en IA. Escribe *3* y lo vemos en 15 minutos.`;
+Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoría en IA. Escribe *3* y lo vemos en 15 minutos.`;
         case '3':
           setState(ctx.chatId, 'agenda');
           return AGENDA;
@@ -180,14 +180,14 @@ Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoria en IA. E
     name: 'sintoma-descrito',
     match: (ctx) => getState(ctx.chatId)?.step === 'sintoma' && ctx.body.length > 25,
     reply: (ctx) => {
-      // Deliberadamente NO damos el diagnostico. Apuntamos la direccion y
-      // llevamos a la llamada: nombrar la causa sin ver la operacion es adivinar.
+      // Deliberadamente NO damos el diagnóstico. Apuntamos la dirección y
+      // llevamos a la llamada: nombrar la causa sin ver la operación es adivinar.
       setState(ctx.chatId, 'agenda');
-      return `Lo que describes suele tener mas de una causa posible, y casi nunca es la que parece a simple vista. Acertar sin ver la operacion por dentro seria adivinar, y adivinar sale caro.
+      return `Lo que describes suele tener más de una causa posible, y casi nunca es la que parece a simple vista. Acertar sin ver la operación por dentro sería adivinar, y adivinar sale caro.
 
 Eso es exactamente lo que resolvemos en 15 minutos: ${HECHOS.calendly}
 
-Dejame tu correo y te mando lo que conversemos.`;
+Déjame tu correo y te mando lo que conversemos.`;
     },
   },
 
@@ -205,7 +205,7 @@ Dejame tu correo y te mando lo que conversemos.`;
     match: (ctx) => /\b(precio|costo|cuanto cuesta|cuanto vale|tarifa|honorarios|cotizacion|presupuesto)\b/.test(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'agenda');
-      return `Depende del alcance, y el alcance no se define sin entender primero el problema. Darte una cifra ahora seria inventarla.
+      return `Depende del alcance, y el alcance no se define sin entender primero el problema. Darte una cifra ahora sería inventarla.
 
 Para eso son los 15 minutos, y no cuestan nada: ${HECHOS.calendly}`;
     },
@@ -216,7 +216,7 @@ Para eso son los 15 minutos, y no cuestan nada: ${HECHOS.calendly}`;
     match: (ctx) => ['gracias', 'muchas gracias', 'ok gracias', 'perfecto gracias', 'listo gracias'].includes(ctx.text),
     reply: (ctx) => {
       clearHistory(ctx.chatId);
-      return 'Con gusto. Si necesitas algo mas, escribe *menu*.';
+      return 'Con gusto. Si necesitas algo más, escribe *menú*.';
     },
   },
 
@@ -234,12 +234,12 @@ const ESCALADO = `Le paso esto a Christian. ${HECHOS.tiempoRespuesta}
 
 Si prefieres no esperar, agenda los 15 minutos: ${HECHOS.calendly}`;
 
-/** Respuesta cuando ninguna regla coincidio. */
+/** Respuesta cuando ninguna regla coincidió. */
 export async function fallback(ctx) {
   const current = getState(ctx.chatId);
 
-  // Ya pidio hablar con una persona: el bot se calla. Nada peor que un bot
-  // insistiendo cuando el cliente ya pidio un humano.
+  // Ya pidió hablar con una persona: el bot se calla. Nada peor que un bot
+  // insistiendo cuando el cliente ya pidió un humano.
   if (current?.step === 'asesor') return { rule: 'silencio-asesor', text: null };
 
   const ai = await generateReply(ctx);
@@ -252,10 +252,10 @@ export async function fallback(ctx) {
 
   if (ai?.text) return { rule: 'ia', text: ai.text };
 
-  // La IA esta apagada o fallo: el menu sigue ahi. El cliente nunca se queda
+  // La IA está apagada o falló: el menú sigue ahí. El cliente nunca se queda
   // sin respuesta por un problema del proveedor.
   setState(ctx.chatId, 'menu');
-  return { rule: 'fallback-menu', text: `No termino de entender.\n\n${MENU}` };
+  return { rule: 'fallback-menu', text: `No terminé de entender.\n\n${MENU}` };
 }
 
 /** Resuelve el texto de respuesta. null = no responder. */
