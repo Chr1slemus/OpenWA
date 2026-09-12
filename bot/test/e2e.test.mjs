@@ -102,6 +102,20 @@ check(
 );
 check('marco como leido', calls.some((c) => c.path.includes('/chats/read')));
 
+console.log('\n--- Saludos coloquiales ---');
+const { resolveReply: rrSaludo } = await import('../src/rules.js');
+const ctxSaludo = (body) => ({
+  chatId: `saludo-${body}@c.us`, body, text: body.toLowerCase(), type: 'chat',
+  isGroup: false, senderName: null, messageId: 'x', withinBusinessHours: true,
+});
+for (const palabra of ['holi', 'hello', 'hey', 'kiubo', 'que ondas']) {
+  const r = await rrSaludo(ctxSaludo(palabra));
+  check(`"${palabra}" se reconoce como saludo`, r.rule === 'saludo', `(${r.rule})`);
+}
+const rConPuntuacion = await rrSaludo(ctxSaludo('hola, quiero saber mas'));
+check('saludo seguido de mas texto (con coma) igual se reconoce',
+  rConPuntuacion.rule === 'saludo', `(${rConPuntuacion.rule})`);
+
 console.log('\n--- Idempotencia ---');
 calls.length = 0;
 const dupKey = 'dup-key-1';
@@ -163,7 +177,11 @@ check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.include
 check('el menu tiene solo 3 opciones', !sends()[0]?.body?.text?.includes('*4*'));
 await post(msg({ chatId: cli2, from: cli2, body: '4' }));
 await settle();
-check('el "4" ya no es una opcion, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('puedo ayudarte'));
+check('el "4" ya no es una opcion, primero pide reformular',
+  sends().at(-1)?.body?.text?.includes('Dejame pensar') || sends().at(-1)?.body?.text?.includes('Déjame pensar'));
+await post(msg({ chatId: cli2, from: cli2, body: '4' }));
+await settle();
+check('si insiste sin ser entendido, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('puedo ayudarte'));
 // El escalamiento a un humano ahora solo ocurre via IA (ver seccion "IA" mas abajo).
 
 console.log('\n--- Limite anti-flood (MAX_REPLIES_PER_CHAT=8) ---');
@@ -249,8 +267,8 @@ calls.length = 0;
 const errCli = '5215577778888@c.us';
 await post(msg({ chatId: errCli, from: errCli, body: 'una consulta cualquiera' }));
 await settle();
-check('si la IA da error, responde el menu',
-  sends()[0]?.body?.text?.includes('puedo ayudarte'),
+check('si la IA da error, el cliente recibe respuesta igual',
+  /puedo ayudarte|pensar/i.test(sends()[0]?.body?.text ?? ''),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'timeout';
@@ -258,8 +276,8 @@ calls.length = 0;
 const toCli = '5215599991111@c.us';
 await post(msg({ chatId: toCli, from: toCli, body: 'otra consulta cualquiera' }));
 await new Promise((r) => setTimeout(r, 1500));
-check('si la IA hace timeout, responde el menu',
-  sends()[0]?.body?.text?.includes('puedo ayudarte'),
+check('si la IA hace timeout, el cliente recibe respuesta igual',
+  /puedo ayudarte|pensar/i.test(sends()[0]?.body?.text ?? ''),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'ok';

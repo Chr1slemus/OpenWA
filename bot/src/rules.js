@@ -84,7 +84,13 @@ export function normalize(text) {
 
 const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 
-const saludos = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'que tal', 'saludos'];
+const saludos = [
+  'hola', 'holi', 'hello', 'hey', 'buenas', 'buenos dias', 'buenas tardes',
+  'buenas noches', 'que tal', 'que ondas', 'kiubo', 'saludos',
+];
+// \b en vez de exigir un espacio exacto despues: asi "hola," "hola!" y
+// "hola quiero saber mas" cuentan igual como saludo inicial.
+const SALUDO_RE = new RegExp(`^(${saludos.join('|')})\\b`);
 
 // Corte por conducta impropia. Lista corta y explícita: preferimos dejar pasar
 // un caso dudoso a la IA antes que cortarle la conversación a un cliente real
@@ -142,7 +148,7 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
 
   {
     name: 'saludo',
-    match: (ctx) => saludos.some((s) => ctx.text === s || ctx.text.startsWith(`${s} `)),
+    match: (ctx) => SALUDO_RE.test(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
       const nombre = ctx.senderName ? `Hola, ${ctx.senderName.split(' ')[0]}.` : 'Hola.';
@@ -255,10 +261,17 @@ export async function fallback(ctx) {
 
   if (ai?.text) return { rule: 'ia', text: ai.text };
 
-  // La IA está apagada o falló: el menú sigue ahí. El cliente nunca se queda
-  // sin respuesta por un problema del proveedor.
-  setState(ctx.chatId, 'menu');
-  return { rule: 'fallback-menu', text: `No terminé de entender.\n\n${MENU}` };
+  // La IA está apagada o falló. La PRIMERA vez que no entendemos, pedimos que
+  // lo reescriban en vez de soltar el menú de golpe: se siente menos a
+  // maquina. Si vuelve a fallar seguido, ahí sí mostramos el menú: el
+  // cliente nunca se queda sin salida por quedarse atascado en la duda.
+  const intentosFallidos = (current?.misses ?? 0) + 1;
+  if (intentosFallidos >= 2) {
+    setState(ctx.chatId, 'menu', { misses: 0 });
+    return { rule: 'fallback-menu', text: `No logro entender bien. Vamos de nuevo.\n\n${MENU}` };
+  }
+  setState(ctx.chatId, current?.step ?? 'menu', { misses: intentosFallidos });
+  return { rule: 'fallback-pensar', text: 'Déjame pensar. ¿Me lo puedes escribir de otra forma, en una frase corta?' };
 }
 
 /** Resuelve el texto de respuesta. null = no responder. */
@@ -266,6 +279,10 @@ export async function resolveReply(ctx) {
   for (const rule of rules) {
     if (rule.match(ctx)) {
       const text = await rule.reply(ctx);
+      // Cualquier regla reconocida borra el contador de "no entendi": el
+      // cliente ya se hizo entender, no cargamos esa duda a la siguiente vez.
+      const entry = getState(ctx.chatId);
+      if (entry?.misses) setState(ctx.chatId, entry.step, { misses: 0 });
       return { rule: rule.name, text };
     }
   }
