@@ -20,14 +20,13 @@ import { generateReply, clearHistory, sweepHistory } from './ai.js';
 import { HECHOS, SERVICIOS } from './brand.js';
 import { log, maskJid } from './logger.js';
 
-const MENU = `Soy Chris, la representacion virtual de Christian Lemus, de *Central Global Solutions*.
+const MENU = `Soy Chris, de *Central Global Solutions*.
 
-Dime que necesitas:
+¿Como puedo ayudarte?
 
 *1* Mi empresa dejo de crecer y no se por que
 *2* Que hacemos y para quien
 *3* Agendar la llamada de 15 minutos
-*4* Hablar con Christian
 
 Escribe *menu* cuando quieras volver aqui.`;
 
@@ -153,7 +152,7 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
 
   {
     name: 'opcion-menu',
-    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3', '4'].includes(ctx.text),
+    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3'].includes(ctx.text),
     reply: (ctx) => {
       switch (ctx.text) {
         case '1':
@@ -171,13 +170,6 @@ Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoria en IA. E
         case '3':
           setState(ctx.chatId, 'agenda');
           return AGENDA;
-        case '4':
-          setState(ctx.chatId, 'asesor');
-          return `Listo, le aviso a Christian. ${HECHOS.tiempoRespuesta}
-
-Si prefieres hablar antes, agenda los 15 minutos: ${HECHOS.calendly}
-
-Dejame tu correo para no perder el hilo.`;
         default:
           return null;
       }

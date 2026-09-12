@@ -137,17 +137,17 @@ check('opcion 1 pide describir el sintoma', sends()[1]?.body?.text?.includes('Qu
 await settle();
 
 
-console.log('\n--- Escalamiento a humano ---');
+console.log('\n--- Menu sin opcion de hablar con una persona ---');
 calls.length = 0;
 const cli2 = '5215577776666@c.us';
 await post(msg({ chatId: cli2, from: cli2, body: 'hola' }));
 await settle();
+check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.includes('Christian'));
+check('el menu tiene solo 3 opciones', !sends()[0]?.body?.text?.includes('*4*'));
 await post(msg({ chatId: cli2, from: cli2, body: '4' }));
 await settle();
-const antes = sends().length;
-await post(msg({ chatId: cli2, from: cli2, body: 'sigo esperando?' }));
-await settle();
-check('el bot se calla tras pedir asesor', sends().length === antes, `(${antes} -> ${sends().length})`);
+check('el "4" ya no es una opcion, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('dejo de crecer'));
+// El escalamiento a un humano ahora solo ocurre via IA (ver seccion "IA" mas abajo).
 
 console.log('\n--- Limite anti-flood (MAX_REPLIES_PER_CHAT=8) ---');
 calls.length = 0;
