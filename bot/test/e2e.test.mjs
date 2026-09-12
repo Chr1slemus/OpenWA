@@ -90,7 +90,7 @@ r = await post(msg());
 check('firma valida -> 200', r.status === 200, `(recibido ${r.status})`);
 await settle();
 check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`);
-check('la respuesta es el menu', sends()[0]?.body?.text?.includes('dejo de crecer'));
+check('la respuesta es el menu', sends()[0]?.body?.text?.includes('puedo ayudarte'));
 check(
   'saluda por el nombre',
   sends()[0]?.body?.text?.includes('Hola, Chris'),
@@ -146,7 +146,7 @@ check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.include
 check('el menu tiene solo 3 opciones', !sends()[0]?.body?.text?.includes('*4*'));
 await post(msg({ chatId: cli2, from: cli2, body: '4' }));
 await settle();
-check('el "4" ya no es una opcion, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('dejo de crecer'));
+check('el "4" ya no es una opcion, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('puedo ayudarte'));
 // El escalamiento a un humano ahora solo ocurre via IA (ver seccion "IA" mas abajo).
 
 console.log('\n--- Limite anti-flood (MAX_REPLIES_PER_CHAT=8) ---');
@@ -233,7 +233,7 @@ const errCli = '5215577778888@c.us';
 await post(msg({ chatId: errCli, from: errCli, body: 'una consulta cualquiera' }));
 await settle();
 check('si la IA da error, responde el menu',
-  sends()[0]?.body?.text?.includes('dejo de crecer'),
+  sends()[0]?.body?.text?.includes('puedo ayudarte'),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'timeout';
@@ -242,7 +242,7 @@ const toCli = '5215599991111@c.us';
 await post(msg({ chatId: toCli, from: toCli, body: 'otra consulta cualquiera' }));
 await new Promise((r) => setTimeout(r, 1500));
 check('si la IA hace timeout, responde el menu',
-  sends()[0]?.body?.text?.includes('dejo de crecer'),
+  sends()[0]?.body?.text?.includes('puedo ayudarte'),
   `(${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`);
 
 aiMode = 'ok';
@@ -349,7 +349,7 @@ check('sin signos de exclamacion', !textos.some((t) => t.includes('!')));
 check('sin urgencia comercial',
   !textos.some((t) => /(aprovecha|tiempo limitado|promocion|descuento)/i.test(t)));
 check('el menu ofrece la llamada de diagnostico',
-  textos.some((t) => t.includes('Agendar la llamada')));
+  textos.some((t) => t.includes('agendar una videollamada')));
 check('no da cifras de precio', !textos.some((t) => /\d{3},\d{3}|\$\s?\d/.test(t)));
 
 console.log('\n--- Health ---');

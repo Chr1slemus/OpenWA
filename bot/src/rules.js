@@ -22,13 +22,13 @@ import { log, maskJid } from './logger.js';
 
 const MENU = `Soy Chris, de *Central Global Solutions*.
 
-¿Como puedo ayudarte?
+¿Cómo puedo ayudarte?
 
-*1* Mi empresa dejo de crecer y no se por que
-*2* Que hacemos y para quien
-*3* Agendar la llamada de 15 minutos
+*1* Mi empresa o proyecto no está dándome los resultados esperados y quiero saber por qué
+*2* Quiero saber qué servicios ofrecen
+*3* Quiero agendar una videollamada
 
-Escribe *menu* cuando quieras volver aqui.`;
+Escribe *menu* si quieres iniciar de nuevo en cualquier momento.`;
 
 const FUERA_DE_HORARIO = `Gracias por escribir a *Central Global Solutions*.
 
