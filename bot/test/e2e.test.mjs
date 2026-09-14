@@ -94,11 +94,11 @@ r = await post(msg());
 check('firma valida -> 200', r.status === 200, `(recibido ${r.status})`);
 await settle();
 check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`);
-check('la respuesta es el menu', sends()[0]?.body?.text?.includes('puedo ayudarte'));
+check('la respuesta es el menu de saludo', sends()[0]?.body?.text?.includes('Escribe la opción del menú'));
 check(
-  'saluda por el nombre',
-  sends()[0]?.body?.text?.includes('Hola, Chris'),
-  `(texto: ${JSON.stringify(sends()[0]?.body?.text?.slice(0, 40))})`,
+  'no repite "Soy Chris" en el saludo (ya lo dice el mensaje de bienvenida de OpenWA)',
+  !sends()[0]?.body?.text?.includes('Soy Chris'),
+  `(texto: ${JSON.stringify(sends()[0]?.body?.text?.slice(0, 60))})`,
 );
 check('marco como leido', calls.some((c) => c.path.includes('/chats/read')));
 

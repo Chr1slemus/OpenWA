@@ -20,15 +20,24 @@ import { generateReply, clearHistory, sweepHistory } from './ai.js';
 import { HECHOS, SERVICIOS } from './brand.js';
 import { log, maskJid } from './logger.js';
 
-const MENU = `Soy Chris, de *Central Global Solutions*.
-
-¿Cómo puedo ayudarte?
-
-*1* Mi empresa o proyecto no está dándome los resultados esperados y quiero saber por qué
+const OPCIONES = `*1* Mi empresa o proyecto no está dándome los resultados esperados y quiero saber por qué
 *2* Quiero saber qué servicios ofrecen
 *3* Quiero agendar una videollamada
 
 Escribe *menú* si quieres iniciar de nuevo en cualquier momento.`;
+
+const MENU = `Soy Chris, de *Central Global Solutions*.
+
+¿Cómo puedo ayudarte?
+
+${OPCIONES}`;
+
+// Saludo inicial: ya no repite "Soy Chris..." porque OpenWA manda su propio
+// mensaje de bienvenida antes de que llegue este.
+const MENU_SALUDO = `Escribe la opción del menú que más se acerca a lo que necesitas.
+Solo pon el número, sin guiones u otros símbolos.
+
+${OPCIONES}`;
 
 const FUERA_DE_HORARIO = `Gracias por escribir a *Central Global Solutions*.
 
@@ -151,8 +160,7 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
     match: (ctx) => SALUDO_RE.test(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
-      const nombre = ctx.senderName ? `Hola, ${ctx.senderName.split(' ')[0]}.` : 'Hola.';
-      return `${nombre} ${MENU}`;
+      return MENU_SALUDO;
     },
   },
 
