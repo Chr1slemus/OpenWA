@@ -142,6 +142,10 @@ export const config = {
 
   // Cuantas claves de idempotencia recordar para descartar reentregas.
   dedupeSize: int('DEDUPE_SIZE', 5000),
+
+  // JID de WhatsApp al que se avisa cuando una conversacion se escala a una
+  // persona (ej. "50374768183@c.us"). Vacio = no se avisa a nadie.
+  notifyJid: optional('NOTIFY_JID', ''),
 };
 
 // OPENWA_API_KEY y OPENAI_API_KEY se diferencian en dos letras transpuestas.

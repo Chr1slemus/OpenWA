@@ -6,6 +6,9 @@ import { normalize, resolveReply, sweepState } from './rules.js';
 
 const throttle = new Throttle(config.throttle);
 
+// Reglas cuya respuesta significa "esto ya lo debe ver una persona".
+const ESCALATION_RULES = new Set(['ia-escalamiento', 'media-sin-texto']);
+
 // Limpieza periodica para que los Map no crezcan indefinidamente.
 const sweeper = setInterval(() => {
   throttle.sweep();
@@ -103,6 +106,12 @@ export async function handleMessageReceived(payload) {
 
   const { rule, text } = await resolveReply(ctx);
 
+  if (ESCALATION_RULES.has(rule)) {
+    notifyEscalation(ctx, rule).catch((error) => {
+      log.error('Fallo al enviar aviso de escalamiento', { error: error.message });
+    });
+  }
+
   if (!text) {
     log.info('Regla decidio no responder', { rule, chatId: maskJid(chatId) });
     return;
@@ -154,6 +163,27 @@ export async function handleMessageReceived(payload) {
       body: error.body ?? null,
     });
   }
+}
+
+/** Avisa por WhatsApp a NOTIFY_JID que una conversacion necesita una persona. */
+async function notifyEscalation(ctx, rule) {
+  if (!config.notifyJid) return;
+
+  // Comparte el limite global con las respuestas a clientes: sigue siendo
+  // un envio mas desde el mismo numero de WhatsApp.
+  const gate = throttle.take(config.notifyJid);
+  if (!gate.allowed) {
+    log.warn('Aviso de escalamiento omitido por limite de envio', { reason: gate.reason });
+    return;
+  }
+
+  const numero = ctx.chatId.split('@')[0];
+  const quien = ctx.senderName ? `${ctx.senderName} (${numero})` : numero;
+  const motivo = rule === 'media-sin-texto' ? 'mando un archivo o audio sin texto' : 'la IA lo derivo a una persona';
+  const resumen = ctx.body ? `\n\nUltimo mensaje: "${ctx.body}"` : '';
+
+  await openwa.sendText(config.notifyJid, `Aviso: ${quien} necesita atencion (${motivo}).${resumen}`);
+  log.info('Aviso de escalamiento enviado', { chatId: maskJid(ctx.chatId), rule });
 }
 
 /** Eventos de sesion: utiles para saber si el numero se desconecto o fue restringido. */
