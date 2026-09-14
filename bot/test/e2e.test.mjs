@@ -96,8 +96,8 @@ await settle();
 check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`);
 check('la respuesta es el menu de saludo', sends()[0]?.body?.text?.includes('Escribe la opción del menú'));
 check(
-  'no repite "Soy Chris" en el saludo (ya lo dice el mensaje de bienvenida de OpenWA)',
-  !sends()[0]?.body?.text?.includes('Soy Chris'),
+  'el saludo se presenta como Chris de Central Global Solutions',
+  sends()[0]?.body?.text?.includes('Soy Chris'),
   `(texto: ${JSON.stringify(sends()[0]?.body?.text?.slice(0, 60))})`,
 );
 check('marco como leido', calls.some((c) => c.path.includes('/chats/read')));
@@ -177,11 +177,11 @@ check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.include
 check('el menu tiene solo 3 opciones', !sends()[0]?.body?.text?.includes('*4*'));
 await post(msg({ chatId: cli2, from: cli2, body: '4' }));
 await settle();
-check('el "4" ya no es una opcion, primero pide reformular',
-  sends().at(-1)?.body?.text?.includes('Dejame pensar') || sends().at(-1)?.body?.text?.includes('Déjame pensar'));
+check('el "4" ya no es una opcion, primero indaga en vez de repetir el menu',
+  sends().at(-1)?.body?.text?.includes('¿Cómo puedo ayudarte?'));
 await post(msg({ chatId: cli2, from: cli2, body: '4' }));
 await settle();
-check('si insiste sin ser entendido, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('puedo ayudarte'));
+check('si insiste sin elegir, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('Vamos de nuevo'));
 // El escalamiento a un humano ahora solo ocurre via IA (ver seccion "IA" mas abajo).
 
 console.log('\n--- Limite anti-flood (MAX_REPLIES_PER_CHAT=8) ---');
@@ -380,7 +380,10 @@ for (const chat of ['a@c.us', 'b@c.us', 'c@c.us']) {
 }
 check('sin rayas largas (em dash)', !textos.some((t) => /[—–]/.test(t)),
   `(${JSON.stringify(textos.find((t) => /[—–]/.test(t))?.slice(0, 60))})`);
-check('sin signos de exclamacion', !textos.some((t) => t.includes('!')));
+// El saludo inicial es la unica excepcion deliberada: el cliente pidio
+// "¡Hola!" tal cual. Fuera de esa, ningun texto deterministico usa "!".
+check('sin signos de exclamacion (salvo el saludo inicial)',
+  !textos.some((t) => t.includes('!') && !t.startsWith('¡Hola! Gracias por escribirnos')));
 check('sin urgencia comercial',
   !textos.some((t) => /(aprovecha|tiempo limitado|promocion|descuento)/i.test(t)));
 check('el menu ofrece la llamada de diagnostico',

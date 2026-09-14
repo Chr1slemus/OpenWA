@@ -32,9 +32,12 @@ const MENU = `Soy Chris, de *Central Global Solutions*.
 
 ${OPCIONES}`;
 
-// Saludo inicial: ya no repite "Soy Chris..." porque OpenWA manda su propio
-// mensaje de bienvenida antes de que llegue este.
-const MENU_SALUDO = `Escribe la opción del menú que más se acerca a lo que necesitas.
+// Saludo inicial: un solo mensaje. Ya NO depende de un mensaje de bienvenida
+// aparte de OpenWA, asi que si ese se reactiva hay que desactivarlo para no
+// duplicar el saludo.
+const MENU_SALUDO = `¡Hola! Gracias por escribirnos. Soy Chris, de *Central Global Solutions*.
+
+Escribe la opción del menú que más se acerca a lo que necesitas.
 Solo pon el número, sin guiones u otros símbolos.
 
 ${OPCIONES}`;
@@ -269,17 +272,23 @@ export async function fallback(ctx) {
 
   if (ai?.text) return { rule: 'ia', text: ai.text };
 
-  // La IA está apagada o falló. La PRIMERA vez que no entendemos, pedimos que
-  // lo reescriban en vez de soltar el menú de golpe: se siente menos a
-  // maquina. Si vuelve a fallar seguido, ahí sí mostramos el menú: el
-  // cliente nunca se queda sin salida por quedarse atascado en la duda.
+  // La IA está apagada o falló. La PRIMERA vez que no entendemos, no soltamos
+  // el menú de golpe: se siente menos a maquina. Si vuelve a fallar seguido,
+  // ahí sí mostramos el menú: el cliente nunca se queda sin salida.
   const intentosFallidos = (current?.misses ?? 0) + 1;
   if (intentosFallidos >= 2) {
     setState(ctx.chatId, 'menu', { misses: 0 });
     return { rule: 'fallback-menu', text: `No logro entender bien. Vamos de nuevo.\n\n${MENU}` };
   }
   setState(ctx.chatId, current?.step ?? 'menu', { misses: intentosFallidos });
-  return { rule: 'fallback-pensar', text: 'Déjame pensar. ¿Me lo puedes escribir de otra forma, en una frase corta?' };
+  // Si ya vio el menú y no eligió una opción, no asumimos que escribió mal:
+  // puede que solo quiera contar su situación con sus propias palabras.
+  // Si estaba en otro paso de la conversación, ahí sí probablemente no se
+  // entendió lo que escribió.
+  const pregunta = (current?.step ?? 'menu') === 'menu'
+    ? '¿Cómo puedo ayudarte?'
+    : 'Déjame pensar. ¿Me lo puedes escribir de otra forma, en una frase corta?';
+  return { rule: 'fallback-pensar', text: pregunta };
 }
 
 /** Resuelve el texto de respuesta. null = no responder. */
