@@ -151,36 +151,38 @@ await post(msg({ chatId: cliente, from: cliente, body: 'hola' }));
 await settle();
 await post(msg({ chatId: cliente, from: cliente, body: '1' }));
 await settle();
-check('opcion 1 pide describir el sintoma', /est[aá]s viendo/i.test(sends()[1]?.body?.text ?? ''));
+check('opcion 1 manda al enlace de la llamada de descubrimiento',
+  sends()[1]?.body?.text?.includes('calendly.com'));
 
-// Regresion: la opcion 2 invita a "escribe 3", asi que el "3" que sigue debe
+// Regresion: la opcion 2 invita a "escribe 1", asi que el "1" que sigue debe
 // seguir cayendo en el menu, no perderse en un estado intermedio.
 const cli3 = '5215599997777@c.us';
 await post(msg({ chatId: cli3, from: cli3, body: 'hola' }));
 await settle();
 await post(msg({ chatId: cli3, from: cli3, body: '2' }));
 await settle();
-await post(msg({ chatId: cli3, from: cli3, body: '3' }));
+await post(msg({ chatId: cli3, from: cli3, body: '1' }));
 await settle();
-check('tras la opcion 2, el "3" sigue llevando a agendar',
+check('tras la opcion 2, el "1" sigue llevando a agendar',
   sends().at(-1)?.body?.text?.includes('calendly.com'),
   `(${JSON.stringify(sends().at(-1)?.body?.text?.slice(0, 40))})`);
 
 await settle();
 
 
-console.log('\n--- Menu sin opcion de hablar con una persona ---');
+console.log('\n--- Menu explicito: 5 opciones, sin opcion de hablar con una persona ---');
 calls.length = 0;
 const cli2 = '5215577776666@c.us';
-await post(msg({ chatId: cli2, from: cli2, body: 'hola' }));
+await post(msg({ chatId: cli2, from: cli2, body: 'menu' }));
 await settle();
 check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.includes('Christian'));
-check('el menu tiene solo 3 opciones', !sends()[0]?.body?.text?.includes('*4*'));
-await post(msg({ chatId: cli2, from: cli2, body: '4' }));
+check('el menu tiene 5 opciones', sends()[0]?.body?.text?.includes('*5*'));
+check('el menu no tiene una sexta opcion', !sends()[0]?.body?.text?.includes('*6*'));
+await post(msg({ chatId: cli2, from: cli2, body: '9' }));
 await settle();
-check('el "4" ya no es una opcion, primero indaga en vez de repetir el menu',
+check('un digito invalido primero indaga en vez de repetir el menu',
   sends().at(-1)?.body?.text?.includes('¿Cómo puedo ayudarte?'));
-await post(msg({ chatId: cli2, from: cli2, body: '4' }));
+await post(msg({ chatId: cli2, from: cli2, body: '9' }));
 await settle();
 check('si insiste sin elegir, cae al menu de nuevo', sends().at(-1)?.body?.text?.includes('Vamos de nuevo'));
 // El escalamiento a un humano ahora solo ocurre via IA (ver seccion "IA" mas abajo).
@@ -388,7 +390,7 @@ check('sin signos de exclamacion (salvo el saludo inicial)',
 check('sin urgencia comercial',
   !textos.some((t) => /(aprovecha|tiempo limitado|promocion|descuento)/i.test(t)));
 check('el menu ofrece la llamada de diagnostico',
-  textos.some((t) => t.includes('agendar una videollamada')));
+  textos.some((t) => t.includes('Quiero un diagnóstico')));
 check('no da cifras de precio', !textos.some((t) => /\d{3},\d{3}|\$\s?\d/.test(t)));
 
 console.log('\n--- Health ---');

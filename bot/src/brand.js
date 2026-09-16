@@ -48,9 +48,10 @@ export const HECHOS = {
   telefonoOficina: '503 2225 5333',
   correo: 'info@cgs.sv',
   linkedin: 'https://www.linkedin.com/company/centralglobalsolutions/',
-  // No recibimos visitas sin cita. Quien pida dirección se atiende por
-  // teléfono o WhatsApp, nunca se le da una dirección física.
-  politicaVisitas: 'No recibimos visitas sin cita. Para hablar, mejor una llamada al teléfono de oficina o seguir por aquí.',
+  // No damos direccion fisica. Toda interaccion inicial es digital; una
+  // visita, si hace falta, se coordina por telefono despues de esa primera
+  // interaccion.
+  politicaVisitas: 'Toda interacción inicial es por medios digitales. Si hace falta una visita, se coordina llamando al 503 2225 5333.',
   mantra: 'Observamos, entendemos y resolvemos.',
   trayectoriaFirma: 'CGS lleva diecinueve años operando en la región.',
   mercado: 'El Salvador es el mercado principal. También atendemos Centroamérica y Sudamérica.',

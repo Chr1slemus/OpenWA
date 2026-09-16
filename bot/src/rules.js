@@ -20,15 +20,15 @@ import { generateReply, clearHistory, sweepHistory } from './ai.js';
 import { HECHOS, SERVICIOS } from './brand.js';
 import { log, maskJid } from './logger.js';
 
-const OPCIONES = `*1* Mi empresa o proyecto no está dándome los resultados esperados y quiero saber por qué
-*2* Quiero saber qué servicios ofrecen
-*3* Quiero agendar una videollamada
+const OPCIONES = `*1* Quiero un diagnóstico para mi empresa o negocio
+*2* Quiero conocer sus servicios
+*3* Quiero más información sobre ustedes
+*4* Quiero escribirles un correo
+*5* Quiero llamarles
 
 Escribe *menú* si quieres iniciar de nuevo en cualquier momento.`;
 
-const MENU = `Soy Chris, de *Central Global Solutions*.
-
-¿Cómo puedo ayudarte?
+const MENU = `Escoge la opción más cercana a lo que necesitas.
 
 ${OPCIONES}`;
 
@@ -173,45 +173,31 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
 
   {
     name: 'opcion-menu',
-    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3'].includes(ctx.text),
+    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3', '4', '5'].includes(ctx.text),
     reply: (ctx) => {
       switch (ctx.text) {
         case '1':
-          setState(ctx.chatId, 'sintoma');
-          return `Ese es el problema que trabajamos. Casi todas las empresas sienten el síntoma, muy pocas ubican la causa.
-
-Cuéntame qué estás viendo. Ventas planas, rotación, márgenes que se encogen, proyectos que no cierran.`;
+          setState(ctx.chatId, 'agenda');
+          return AGENDA;
         case '2':
-          // Se queda en 'menu', no en un paso nuevo: la respuesta invita a
-          // escribir *3* a continuacion, y eso solo funciona si el estado
-          // sigue siendo 'menu' cuando llega ese digito.
           setState(ctx.chatId, 'menu');
           return `${HECHOS.mantra} En ese orden.
 
 Trabajamos con empresas establecidas que llevan años sin crecer, sobre todo en ${HECHOS.sectores.slice(0, 3).join(', ').toLowerCase()} y manufactura. ${HECHOS.trayectoriaFirma}
 
-Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoría en IA. Escribe *3* y lo vemos en 15 minutos.`;
+Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoría en IA. Escribe *1* y lo vemos en 15 minutos.`;
         case '3':
-          setState(ctx.chatId, 'agenda');
-          return AGENDA;
+          setState(ctx.chatId, 'menu');
+          return `Más sobre nosotros, aquí: ${HECHOS.sitio}`;
+        case '4':
+          setState(ctx.chatId, 'menu');
+          return `Escríbenos a: ${HECHOS.correo}`;
+        case '5':
+          setState(ctx.chatId, 'menu');
+          return `Puedes llamarnos al ${HECHOS.telefonoOficina}.`;
         default:
           return null;
       }
-    },
-  },
-
-  {
-    name: 'sintoma-descrito',
-    match: (ctx) => getState(ctx.chatId)?.step === 'sintoma' && ctx.body.length > 25,
-    reply: (ctx) => {
-      // Deliberadamente NO damos el diagnóstico. Apuntamos la dirección y
-      // llevamos a la llamada: nombrar la causa sin ver la operación es adivinar.
-      setState(ctx.chatId, 'agenda');
-      return `Lo que describes suele tener más de una causa posible, y casi nunca es la que parece a simple vista. Acertar sin ver la operación por dentro sería adivinar, y adivinar sale caro.
-
-Eso es exactamente lo que resolvemos en 15 minutos: ${HECHOS.calendly}
-
-Déjame tu correo y te mando lo que conversemos.`;
     },
   },
 
