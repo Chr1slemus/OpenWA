@@ -35,12 +35,16 @@ ${OPCIONES}`;
 // Saludo inicial: un solo mensaje. Ya NO depende de un mensaje de bienvenida
 // aparte de OpenWA, asi que si ese se reactiva hay que desactivarlo para no
 // duplicar el saludo.
-const MENU_SALUDO = `¡Hola! Gracias por escribirnos. Soy Chris, de *Central Global Solutions*.
+//
+// A proposito NO se enumera el menu aqui. Retroalimentacion real de
+// usuarios de prueba: mostrar el menu numerado como primer mensaje se siente
+// robotico ("directamente comienza a ofrecer un menu"). El menu sigue
+// disponible como atajo (basta escribir *menu*, o incluso un digito suelto
+// una vez aqui: ver la regla 'opcion-menu'), pero el primer mensaje abre con
+// una pregunta natural, como haria una persona.
+const SALUDO = `¡Hola! Gracias por escribirnos. Soy Chris, de *Central Global Solutions*.
 
-Escribe la opción del menú que más se acerca a lo que necesitas.
-Solo pon el número, sin guiones u otros símbolos.
-
-${OPCIONES}`;
+Cuéntame qué necesitas o qué te trae por aquí. Si prefieres ver opciones rápidas, escribe *menú*.`;
 
 const FUERA_DE_HORARIO = `Gracias por escribir a *Central Global Solutions*.
 
@@ -163,7 +167,7 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
     match: (ctx) => SALUDO_RE.test(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
-      return MENU_SALUDO;
+      return SALUDO;
     },
   },
 

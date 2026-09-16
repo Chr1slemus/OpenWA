@@ -94,7 +94,8 @@ r = await post(msg());
 check('firma valida -> 200', r.status === 200, `(recibido ${r.status})`);
 await settle();
 check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`);
-check('la respuesta es el menu de saludo', sends()[0]?.body?.text?.includes('Escribe la opción del menú'));
+check('el saludo abre con pregunta abierta, no con el menu enumerado',
+  sends()[0]?.body?.text?.includes('Cuéntame qué necesitas') && !sends()[0]?.body?.text?.includes('*1*'));
 check(
   'el saludo se presenta como Chris de Central Global Solutions',
   sends()[0]?.body?.text?.includes('Soy Chris'),
