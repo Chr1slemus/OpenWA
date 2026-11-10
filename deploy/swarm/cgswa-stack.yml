@@ -208,7 +208,11 @@ services:
         constraints:
           - node.role == manager
       restart_policy:
-        condition: on-failure
+        # "any", no "on-failure": ver el comentario identico en openwa mas
+        # arriba. Un apagado limpio (codigo 0, p. ej. un reinicio del
+        # servidor) con "on-failure" deja el servicio en 0/1 PARA SIEMPRE sin
+        # ningun error visible. Ya paso con redis y bot, no solo con openwa.
+        condition: any
         delay: 5s
       resources:
         limits:
@@ -289,7 +293,9 @@ services:
         constraints:
           - node.role == manager
       restart_policy:
-        condition: on-failure
+        # "any": ver el comentario en openwa y redis. Misma clase de bug,
+        # mismo arreglo.
+        condition: any
         delay: 5s
       update_config:
         order: start-first
