@@ -138,6 +138,10 @@ export const config = {
     // por WhatsApp no hay alcance todavia, asi que una cifra suelta solo sirve
     // para que la comparen. Ponlo en true si prefieres anclar precio antes.
     sharePricing: bool('AI_SHARE_PRICING', false),
+    // Contexto sensible que el modelo NUNCA debe repetir (ver brand.js).
+    // Vive solo en el .env del servidor, nunca en el codigo fuente ni en Git:
+    // ese archivo es el que de verdad se mantiene fuera del repositorio.
+    confidentialContext: optional('AI_CONFIDENTIAL_CONTEXT', ''),
   },
 
   // Cuantas claves de idempotencia recordar para descartar reentregas.

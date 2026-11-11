@@ -97,8 +97,8 @@ check('envio una respuesta', sends().length === 1, `(envios: ${sends().length})`
 check('el saludo abre con pregunta abierta, no con el menu enumerado',
   sends()[0]?.body?.text?.includes('Cuéntame qué necesitas') && !sends()[0]?.body?.text?.includes('*1*'));
 check(
-  'el saludo se presenta como Chris de Central Global Solutions',
-  sends()[0]?.body?.text?.includes('Soy Chris'),
+  'el saludo se presenta como Carol de Central Global Solutions',
+  sends()[0]?.body?.text?.includes('Soy Carol'),
   `(texto: ${JSON.stringify(sends()[0]?.body?.text?.slice(0, 60))})`,
 );
 check('marco como leido', calls.some((c) => c.path.includes('/chats/read')));
@@ -116,6 +116,29 @@ for (const palabra of ['holi', 'hello', 'hey', 'kiubo', 'que ondas']) {
 const rConPuntuacion = await rrSaludo(ctxSaludo('hola, quiero saber mas'));
 check('saludo seguido de mas texto (con coma) igual se reconoce',
   rConPuntuacion.rule === 'saludo', `(${rConPuntuacion.rule})`);
+
+console.log('\n--- Menu ambiguo: confirma antes de asumir ---');
+const ctxAmbiguo = (chatId, body) => ({
+  chatId, body, text: normalizeTxt(body), type: 'chat', isGroup: false,
+  senderName: null, messageId: 'x', withinBusinessHours: true,
+});
+for (const frase of ['Ok, menú', 'Eh... menu']) {
+  const chat = `ambiguo-${frase}@c.us`;
+  const r = await rrSaludo(ctxAmbiguo(chat, frase));
+  check(`"${frase}" no asume el menu, confirma primero`, r.rule === 'menu-ambiguo', `(${r.rule})`);
+  const rSi = await rrSaludo(ctxAmbiguo(chat, 'si'));
+  check(`"${frase}" + "si" ahora si muestra el menu`,
+    rSi.rule === 'menu-confirmar-respuesta' && rSi.text?.includes('*1*'), `(${rSi.rule})`);
+}
+// "menu" sin tilde y "meñu" (typo de ñ) normalizan al mismo string limpio
+// "menu": van directo por la via exacta, sin necesitar confirmacion.
+const rMenu = await rrSaludo(ctxAmbiguo('tilde@c.us', 'meñu'));
+check('"meñu" normaliza a "menu" y va directo, sin confirmar',
+  rMenu.rule === 'menu-explicito' && rMenu.text?.includes('*1*'), `(${rMenu.rule})`);
+const chatNo = 'ambiguo-no@c.us';
+await rrSaludo(ctxAmbiguo(chatNo, 'menu porfa'));
+const rNo = await rrSaludo(ctxAmbiguo(chatNo, 'no'));
+check('si responde "no", no muestra el menu', !rNo.text?.includes('*1*'), `(${JSON.stringify(rNo.text)})`);
 
 console.log('\n--- Idempotencia ---');
 calls.length = 0;
@@ -290,9 +313,9 @@ console.log('\n--- Persona y canal ---');
 const { construirPromptSistema: cps } = await import('../src/brand.js');
 const p0 = cps();
 
-check('se presenta como representacion virtual, no como Christian',
-  /representaci[oó]n virtual/i.test(p0) && /no Christian Lemus/i.test(p0));
-check('prohibe afirmar ser humano', /Nunca afirmes ser humano/i.test(p0));
+check('se presenta como agente de CGS, no como una persona del equipo',
+  /agente de atenci[oó]n/i.test(p0) && /no una persona del equipo/i.test(p0));
+check('prohibe afirmar ser humana', /Nunca afirmes ser humana/i.test(p0));
 // El perfil venia escrito para el avatar del sitio. En WhatsApp estas tres
 // instrucciones se invierten, y es el error mas facil de cometer al portarlo.
 // Ojo: la frase SI aparece, pero prohibida. Comprobar solo su ausencia daria

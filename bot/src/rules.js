@@ -11,13 +11,13 @@
  * Gana la PRIMERA que coincide. Si ninguna lo hace y AI_ENABLED=true,
  * contesta la IA: las reglas van primero porque son gratis y predecibles.
  *
- * VOZ: sigue el perfil de Christian Lemus y la sección 4 del documento de
- * marca. Directa, llana, sin adorno. Sin exclamaciones, sin rayas largas, sin
+ * VOZ: sigue la voz de marca de CGS (sección 4 del documento de marca).
+ * Directa, llana, sin adorno. Sin exclamaciones, sin rayas largas, sin
  * urgencia comercial, casi sin emoji. Si editas, mantén ese registro.
  */
 
 import { generateReply, clearHistory, sweepHistory } from './ai.js';
-import { HECHOS, SERVICIOS } from './brand.js';
+import { HECHOS, ETAPAS } from './brand.js';
 import { log, maskJid } from './logger.js';
 
 const OPCIONES = `*1* Quiero un diagnóstico para mi empresa o negocio
@@ -42,7 +42,7 @@ ${OPCIONES}`;
 // disponible como atajo (basta escribir *menu*, o incluso un digito suelto
 // una vez aqui: ver la regla 'opcion-menu'), pero el primer mensaje abre con
 // una pregunta natural, como haria una persona.
-const SALUDO = `¡Hola! Gracias por escribirnos. Soy Chris, de *Central Global Solutions*.
+const SALUDO = `¡Hola! Gracias por escribirnos. Soy Carol, de *Central Global Solutions*.
 
 Cuéntame qué necesitas o qué te trae por aquí. Si prefieres ver opciones rápidas, escribe *menú*.`;
 
@@ -113,6 +113,16 @@ const SALUDO_RE = new RegExp(`^(${saludos.join('|')})\\b`);
 // por un falso positivo.
 const OFENSIVO = /\b(put[oa]s?|mierda|imbecil|idiota|estupid[oa]|pendej[oa]|maric[oa]n|verga|culer[oa]|jodete|vete a la)\b/i;
 
+// "Si" / "no" cortos, tolerantes a variantes comunes de confirmacion.
+const SI_RE = /^(si|s|claro|va|dale|ok|okay|yes|afirmativo)\b/;
+const NO_RE = /^(no|nel|negativo)\b/;
+
+// La palabra "menu" aparece, pero el mensaje no es exactamente uno de los
+// atajos limpios de 'menu-explicito' (trae muletillas u otras palabras
+// alrededor: "ok, menu", "eh... menu"). Ahi no asumimos la intencion:
+// confirmamos con si/no antes de mostrarlo.
+const MENU_PALABRA_RE = /\bmenu\b/;
+
 export const rules = [
   {
     name: 'conducta-impropia',
@@ -163,11 +173,39 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
   },
 
   {
+    name: 'menu-confirmar-respuesta',
+    // Esperando si/no tras 'menu-ambiguo'. Va antes que 'saludo' y las demas
+    // para que la confirmacion pendiente se resuelva primero.
+    match: (ctx) => getState(ctx.chatId)?.step === 'confirmar-menu',
+    reply: (ctx) => {
+      const previo = getState(ctx.chatId)?.previo ?? 'menu';
+      if (SI_RE.test(ctx.text)) {
+        setState(ctx.chatId, 'menu');
+        return MENU;
+      }
+      if (NO_RE.test(ctx.text)) {
+        setState(ctx.chatId, previo);
+        return '¿Cómo puedo ayudarte entonces?';
+      }
+      return 'Para mostrarte el menú, responde *sí* o *no*.';
+    },
+  },
+
+  {
     name: 'saludo',
     match: (ctx) => SALUDO_RE.test(ctx.text),
     reply: (ctx) => {
       setState(ctx.chatId, 'menu');
       return SALUDO;
+    },
+  },
+
+  {
+    name: 'menu-ambiguo',
+    match: (ctx) => MENU_PALABRA_RE.test(ctx.text) && !['menu', 'inicio', 'opciones', '0'].includes(ctx.text),
+    reply: (ctx) => {
+      setState(ctx.chatId, 'confirmar-menu', { previo: getState(ctx.chatId)?.step ?? 'menu' });
+      return '¿Quieres ver el menú de opciones? Responde *sí* o *no*.';
     },
   },
 
@@ -183,9 +221,9 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
           setState(ctx.chatId, 'menu');
           return `${HECHOS.mantra} En ese orden.
 
-Trabajamos con empresas establecidas que llevan años sin crecer, sobre todo en ${HECHOS.sectores.slice(0, 3).join(', ').toLowerCase()} y manufactura. ${HECHOS.trayectoriaFirma}
+${ETAPAS.map((e) => `*${e.nombre}*: ${e.resumen}`).join('\n\n')}
 
-Hacemos ${SERVICIOS.slice(0, 4).join(', ').toLowerCase()} y consultoría en IA. Escribe *1* y lo vemos en 15 minutos.`;
+Puede que solo necesites una de las tres. Escribe *1* y lo vemos en 15 minutos.`;
         case '3':
           setState(ctx.chatId, 'menu');
           return `Más sobre nosotros, aquí: ${HECHOS.sitio}`;
