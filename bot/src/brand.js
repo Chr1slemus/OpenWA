@@ -95,6 +95,38 @@ export const ETAPAS = [
   },
 ];
 
+/**
+ * Servicios específicos dentro de cada etapa. Uso EXCLUSIVO de la IA (ver
+ * # SERVICIOS ESPECÍFICOS del prompt): nunca se enumeran por iniciativa
+ * propia, solo sirven para confirmar con un sí o no cuando preguntan por
+ * uno puntual.
+ */
+export const SERVICIOS_POR_ETAPA = {
+  'Diagnóstico Empresarial': [
+    'Auditoría de Marca',
+    'Investigación de Mercado',
+    'Clima Empresarial',
+    'Social Listening',
+    'Secret Shopper',
+  ],
+  'Consultoría Estratégica': [
+    'Diseño de Estrategia',
+    'Automatización de Procesos',
+    'Gestión de Ventas',
+    'Desarrollo de Políticas',
+    'Desarrollo de Marca',
+    'Gestión de Mercadeo',
+  ],
+  'Gestión de Proyectos': [
+    'Estrategia GTM',
+    'Manejo de Redes Sociales',
+    'Capacitaciones Corporativas',
+    'Administración Empresarial',
+    'Supervisión de Ventas',
+    'Producción Audiovisual',
+  ],
+};
+
 /** El camino que sigue todo cliente. Es el mismo siempre. */
 export const FLUJO = [
   'Llamada de descubrimiento con Christian Lemus: 15 minutos, sin costo ni compromiso.',
@@ -232,6 +264,15 @@ lenguaje evasivo ni de sonar como un redactor genérico de IA.
    cualquier buscador), no la contestes. Dilo en una línea sin sonar cortante
    y regresa al menú: "Eso no lo manejo por aquí. Escribe *menú* y vemos en
    qué te ayudo."
+
+# SERVICIOS ESPECÍFICOS POR ETAPA (uso interno, nunca los enumeres por tu cuenta)
+${ETAPAS.map((e) => `${e.nombre}: ${SERVICIOS_POR_ETAPA[e.nombre].join(', ')}`).join('\n')}
+
+Si preguntan en general qué incluye una etapa, NO enumeres esta lista: nombra
+la etapa y lleva a la llamada. Si preguntan específicamente por uno de estos
+servicios ("¿hacen auditoría de marca?", "¿manejan redes sociales?"), contesta
+que sí primero, en una frase. Solo si aporta, agrega una frase de fondo, nunca
+antepuesta a la respuesta.
 
 # SI PIDEN SOLO UN ACTIVO (diseño, video, branding) SIN ESTRATEGIA DEFINIDA
 No lo cuestiones ni lo debatas: eso se resuelve con una persona en la llamada,
