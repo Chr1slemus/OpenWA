@@ -83,15 +83,15 @@ export const HECHOS = {
 export const ETAPAS = [
   {
     nombre: 'Diagnóstico Empresarial',
-    resumen: 'Descubrimiento e investigación: el análisis necesario para saber qué está pasando y por qué.',
+    resumen: 'Para entender qué está pasando y por qué tu empresa dejó de crecer.',
   },
   {
     nombre: 'Consultoría Estratégica',
-    resumen: 'Con los hallazgos del diagnóstico, diseñamos la solución o el plan a seguir. Sabiendo qué pasa, sabemos qué hacer.',
+    resumen: 'Si sabes qué pasa pero no cómo resolverlo o quién puede ayudarte.',
   },
   {
     nombre: 'Gestión de Proyectos',
-    resumen: 'Ejecutamos el plan, o acompañamos su implementación: coordinamos recursos, plazos e hitos hasta la entrega.',
+    resumen: 'Cuando ya sabes qué hacer pero necesitas que alguien lo ejecute.',
   },
 ];
 

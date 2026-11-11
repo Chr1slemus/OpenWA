@@ -20,11 +20,8 @@ import { generateReply, clearHistory, sweepHistory } from './ai.js';
 import { HECHOS, ETAPAS } from './brand.js';
 import { log, maskJid } from './logger.js';
 
-const OPCIONES = `*1* Quiero un diagnóstico para mi empresa o negocio
-*2* Quiero conocer sus servicios
-*3* Quiero más información sobre ustedes
-*4* Quiero escribirles un correo
-*5* Quiero llamarles
+const OPCIONES = `${ETAPAS.map((e, i) => `*${i + 1}* ${e.nombre}: ${e.resumen}`).join('\n')}
+*4* Necesito algo más.
 
 Escribe *menú* si quieres iniciar de nuevo en cualquier momento.`;
 
@@ -211,31 +208,21 @@ Si quieres adelantar camino, agenda los 15 minutos con Christian: ${HECHOS.calen
 
   {
     name: 'opcion-menu',
-    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3', '4', '5'].includes(ctx.text),
+    match: (ctx) => getState(ctx.chatId)?.step === 'menu' && ['1', '2', '3', '4'].includes(ctx.text),
     reply: (ctx) => {
-      switch (ctx.text) {
-        case '1':
-          setState(ctx.chatId, 'agenda');
-          return AGENDA;
-        case '2':
-          setState(ctx.chatId, 'menu');
-          return `${HECHOS.mantra} En ese orden.
+      const etapaElegida = ETAPAS[Number(ctx.text) - 1];
+      if (etapaElegida) {
+        // Las 3 etapas llevan al mismo lugar: la llamada de descubrimiento
+        // decide, con el diagnostico ya hecho, cual aplica.
+        setState(ctx.chatId, 'agenda');
+        return `*${etapaElegida.nombre}*: ${etapaElegida.resumen}
 
-${ETAPAS.map((e) => `*${e.nombre}*: ${e.resumen}`).join('\n\n')}
-
-Puede que solo necesites una de las tres. Escribe *1* y lo vemos en 15 minutos.`;
-        case '3':
-          setState(ctx.chatId, 'menu');
-          return `Más sobre nosotros, aquí: ${HECHOS.sitio}`;
-        case '4':
-          setState(ctx.chatId, 'menu');
-          return `Escríbenos a: ${HECHOS.correo}`;
-        case '5':
-          setState(ctx.chatId, 'menu');
-          return `Puedes llamarnos al ${HECHOS.telefonoOficina}.`;
-        default:
-          return null;
+${AGENDA}`;
       }
+      // '4' Necesito algo mas: no asumimos, dejamos la pregunta abierta
+      // (la IA o las demas reglas toman el mensaje que sigue).
+      setState(ctx.chatId, 'menu');
+      return '¿Cómo puedo ayudarte? Cuéntame qué necesitas.';
     },
   },
 

@@ -177,18 +177,27 @@ await settle();
 check('opcion 1 manda al enlace de la llamada de descubrimiento',
   sends()[1]?.body?.text?.includes('calendly.com'));
 
-// Regresion: la opcion 2 invita a "escribe 1", asi que el "1" que sigue debe
-// seguir cayendo en el menu, no perderse en un estado intermedio.
-const cli3 = '5215599997777@c.us';
-await post(msg({ chatId: cli3, from: cli3, body: 'hola' }));
+// Las 3 etapas (opciones 1, 2 y 3) llevan todas a la misma llamada de
+// descubrimiento: el diagnostico decide cual aplica, no el menu.
+for (const opcion of ['2', '3']) {
+  const chatEtapa = `etapa-${opcion}@c.us`;
+  await post(msg({ chatId: chatEtapa, from: chatEtapa, body: 'hola' }));
+  await settle();
+  await post(msg({ chatId: chatEtapa, from: chatEtapa, body: opcion }));
+  await settle();
+  check(`opcion ${opcion} tambien lleva a agendar`,
+    sends().at(-1)?.body?.text?.includes('calendly.com'),
+    `(${JSON.stringify(sends().at(-1)?.body?.text?.slice(0, 40))})`);
+}
+
+// Opcion 4 "Necesito algo mas" no asume nada: deja la pregunta abierta.
+const chatAlgoMas = 'algo-mas@c.us';
+await post(msg({ chatId: chatAlgoMas, from: chatAlgoMas, body: 'hola' }));
 await settle();
-await post(msg({ chatId: cli3, from: cli3, body: '2' }));
+await post(msg({ chatId: chatAlgoMas, from: chatAlgoMas, body: '4' }));
 await settle();
-await post(msg({ chatId: cli3, from: cli3, body: '1' }));
-await settle();
-check('tras la opcion 2, el "1" sigue llevando a agendar',
-  sends().at(-1)?.body?.text?.includes('calendly.com'),
-  `(${JSON.stringify(sends().at(-1)?.body?.text?.slice(0, 40))})`);
+check('opcion 4 pregunta abierta, no asume',
+  sends().at(-1)?.body?.text?.includes('¿Cómo puedo ayudarte?'));
 
 await settle();
 
@@ -199,8 +208,8 @@ const cli2 = '5215577776666@c.us';
 await post(msg({ chatId: cli2, from: cli2, body: 'menu' }));
 await settle();
 check('el menu no ofrece hablar con Christian', !sends()[0]?.body?.text?.includes('Christian'));
-check('el menu tiene 5 opciones', sends()[0]?.body?.text?.includes('*5*'));
-check('el menu no tiene una sexta opcion', !sends()[0]?.body?.text?.includes('*6*'));
+check('el menu tiene 4 opciones', sends()[0]?.body?.text?.includes('*4*'));
+check('el menu no tiene una quinta opcion', !sends()[0]?.body?.text?.includes('*5*'));
 await post(msg({ chatId: cli2, from: cli2, body: '9' }));
 await settle();
 check('un digito invalido primero indaga en vez de repetir el menu',
@@ -412,8 +421,8 @@ check('sin signos de exclamacion (salvo el saludo inicial)',
   !textos.some((t) => t.includes('!') && !t.startsWith('¡Hola! Gracias por escribirnos')));
 check('sin urgencia comercial',
   !textos.some((t) => /(aprovecha|tiempo limitado|promocion|descuento)/i.test(t)));
-check('el menu ofrece la llamada de diagnostico',
-  textos.some((t) => t.includes('Quiero un diagnóstico')));
+check('el menu ofrece el diagnostico empresarial',
+  textos.some((t) => t.includes('Diagnóstico Empresarial')));
 check('no da cifras de precio', !textos.some((t) => /\d{3},\d{3}|\$\s?\d/.test(t)));
 
 console.log('\n--- Health ---');
